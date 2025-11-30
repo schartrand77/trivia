@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Small base tweaks */
+html, body, #root { height: 100%; }
+body { @apply bg-slate-100 text-slate-800; }

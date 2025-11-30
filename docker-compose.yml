@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  trivia:
+    build: .
+    image: trivia:latest
+    container_name: trivia
+    ports:
+      - "8080:80"
+    restart: unless-stopped
