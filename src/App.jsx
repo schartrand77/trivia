@@ -73,6 +73,8 @@ const initialState = {
   loading: true,
   loadingMessage: "Initializing...",
   score: 0,
+  correctAnswers: 0,
+  wrongAnswers: 0,
   answeredIds: new Set(),
   currentClue: null,
   feedback: null,
@@ -92,6 +94,8 @@ function gameReducer(state, action) {
         ...state,
         loading: true,
         score: 0,
+        correctAnswers: 0,
+        wrongAnswers: 0,
         answeredIds: new Set(),
         feedback: null,
         currentClue: null,
@@ -131,6 +135,8 @@ function gameReducer(state, action) {
         return {
             ...state,
             score: newScore,
+            correctAnswers: state.correctAnswers + (isCorrect ? 1 : 0),
+            wrongAnswers: state.wrongAnswers + (isCorrect ? 0 : 1),
             answeredIds: newAnsweredIds,
             feedback: isCorrect ? 'correct' : 'incorrect',
             timer: 0, // Stop timer after answer
@@ -154,6 +160,7 @@ function gameReducer(state, action) {
         return {
             ...state,
             score: expiredScore,
+            wrongAnswers: state.wrongAnswers + 1,
             answeredIds: expiredAnsweredIds,
             feedback: 'incorrect',
             timer: 0,
@@ -252,10 +259,11 @@ export default function App() {
   /**
    * @param {number} count - The number of categories to fetch if no specific categories are provided.
    * @param {number[]} [categoriesToUse] - Optional array of specific category IDs to use.
+   * @param {string} [playerNameToSet] - The player name starting the game (defaults to current playerName).
    */
-  const startNewGame = useCallback(async (count, categoriesToUse) => {
+  const startNewGame = useCallback(async (count, categoriesToUse, playerNameToSet = playerName) => {
     // Set the current game player when starting a new game
-    setCurrentGamePlayer(playerName);
+    setCurrentGamePlayer(playerNameToSet);
     dispatch({ type: 'START_NEW_GAME' });
 
               let finalCategoryIds = categoriesToUse;
@@ -318,7 +326,7 @@ export default function App() {
       console.error("Critical error fetching questions:", error);
       dispatch({ type: 'FETCH_FAILED', payload: "Error connecting to Trivia API." });
     } // Missing closing brace for try-catch
-  }, [selectedCategoryIds, selectedDifficulty, dispatch, playerName]);
+  }, [selectedCategoryIds, selectedDifficulty, dispatch]);
 
   const loadGameHistory = useCallback(() => {
     const history = getGameHistory();
@@ -340,15 +348,15 @@ export default function App() {
   }, [loadGameHistory, startNewGame, selectedCategoryIds]);
 
   const saveRecord = useCallback(() => {
-    if (gameState.score === 0) return;
+    if (gameState.correctAnswers === 0 && gameState.wrongAnswers === 0) return;
     // Use the player who started the game, not the current playerName selection
     const playerToSave = currentGamePlayer || playerName;
     const player = players.find(p => p.name === playerToSave);
     if (player) {
-      saveGame(player.id, gameState.score);
+      saveGame(player.id, gameState.correctAnswers, gameState.wrongAnswers);
       loadGameHistory();
     }
-  }, [gameState.score, currentGamePlayer, playerName, players, loadGameHistory]);
+  }, [gameState.correctAnswers, gameState.wrongAnswers, currentGamePlayer, playerName, players, loadGameHistory]);
 
   /**
    * @param {string} name - The name of the new player.
@@ -490,16 +498,16 @@ export default function App() {
   }, [gameState.answeredIds, gameState.gameData.length, saveRecord]);
 
   const handleEndGame = useCallback(() => {
-    if (gameState.score !== 0) {
+    if (gameState.correctAnswers > 0 || gameState.wrongAnswers > 0) {
       const confirmEnd = window.confirm(
-        `Your current score is ${gameState.score}. Do you want to save this score and end the game?`
+        `You have ${gameState.correctAnswers} correct and ${gameState.wrongAnswers} wrong answers. Do you want to save this result and end the game?`
       );
       if (confirmEnd) {
         saveRecord();
       }
     }
     startNewGame(categoryCount);
-  }, [gameState.score, categoryCount, saveRecord, startNewGame]);
+  }, [gameState.correctAnswers, gameState.wrongAnswers, categoryCount, saveRecord, startNewGame]);
 
   return (
     <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
@@ -509,13 +517,15 @@ export default function App() {
           setPlayerName={setPlayerName}
           randomizePlayer={randomizePlayer}
           score={gameState.score}
+          correctAnswers={gameState.correctAnswers}
+          wrongAnswers={gameState.wrongAnswers}
           setShowRecords={setShowRecords}
           setShowPlayers={setShowPlayers}
           saveRecord={saveRecord}
           startNewGame={() => {
-            if (gameState.score > 0) {
+            if (gameState.correctAnswers > 0 || gameState.wrongAnswers > 0) {
               const confirmStart = window.confirm(
-                `You have an unsaved score of ${gameState.score}. Are you sure you want to start a new game and lose your current progress?`
+                `You have answered ${gameState.correctAnswers} correctly and ${gameState.wrongAnswers} incorrectly. Are you sure you want to start a new game and lose your current progress?`
               );
               if (!confirmStart) {
                 return;

@@ -14,14 +14,17 @@ export const initDB = async () => {
     db.run(`
       CREATE TABLE IF NOT EXISTS players (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE
+        name TEXT NOT NULL UNIQUE,
+        correct_answers INTEGER DEFAULT 0,
+        wrong_answers INTEGER DEFAULT 0
       );
     `);
     db.run(`
       CREATE TABLE IF NOT EXISTS game_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         player_id INTEGER,
-        score INTEGER,
+        correct_answers INTEGER,
+        wrong_answers INTEGER,
         date TEXT,
         FOREIGN KEY (player_id) REFERENCES players (id)
       );
@@ -58,16 +61,16 @@ export const getPlayers = () => {
   return res[0].values.map(row => ({ id: row[0], name: row[1] }));
 };
 
-export const saveGame = (playerId, score) => {
+export const saveGame = (playerId, correctAnswers, wrongAnswers) => {
   const db = getDB();
   const date = new Date().toLocaleDateString();
-  db.run('INSERT INTO game_history (player_id, score, date) VALUES (?, ?, ?)', [playerId, score, date]);
+  db.run('INSERT INTO game_history (player_id, correct_answers, wrong_answers, date) VALUES (?, ?, ?, ?)', [playerId, correctAnswers, wrongAnswers, date]);
 };
 
 export const getGameHistory = () => {
   const db = getDB();
   const res = db.exec(`
-    SELECT p.name, gh.score, gh.date
+    SELECT p.name, gh.correct_answers, gh.wrong_answers, gh.date
     FROM game_history gh
     JOIN players p ON gh.player_id = p.id
     ORDER BY gh.id DESC
@@ -76,7 +79,7 @@ export const getGameHistory = () => {
   if (res.length === 0) {
     return [];
   }
-  return res[0].values.map(row => ({ name: row[0], score: row[1], date: row[2] }));
+  return res[0].values.map(row => ({ name: row[0], correct_answers: row[1], wrong_answers: row[2], date: row[3] }));
 };
 
 export const updatePlayer = (id, newName) => {

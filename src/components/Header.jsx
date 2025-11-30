@@ -6,7 +6,9 @@ const Header = ({
   playerName,
   setPlayerName,
   randomizePlayer,
-  score, // Keep score for display
+  score, // Keep score for calculation but don't display
+  correctAnswers,
+  wrongAnswers,
   currentScore, // New prop for confirmation logic
   setShowRecords,
   setShowPlayers,
@@ -97,10 +99,12 @@ const Header = ({
           </div>
 
           {/* Score */}
-          <div className="flex flex-col items-end min-w-[60px]">
-            <span className="text-[10px] text-indigo-200 uppercase font-semibold">Score</span>
-            <span className={`text-xl font-black leading-none tabular-nums ${score < 0 ? 'text-red-300' : 'text-white'}`}>
-              {score}
+          <div className="flex flex-col items-end min-w-[80px]">
+            <span className="text-[10px] text-indigo-200 uppercase font-semibold">Correct / Wrong</span>
+            <span className="text-sm font-bold leading-none tabular-nums">
+              <span className="text-green-300">{correctAnswers}</span>
+              <span className="text-gray-300"> / </span>
+              <span className="text-red-300">{wrongAnswers}</span>
             </span>
           </div>
 
