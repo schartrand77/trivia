@@ -124,8 +124,10 @@ function gameReducer(state, action) {
         };
     case 'ANSWER_QUESTION':
         const { isCorrect, clue } = action.payload;
+        console.log('ANSWER_QUESTION case:', { isCorrect, clueValue: clue.value, stateScore: state.score });
         const newScore = state.score + (isCorrect ? clue.value : -clue.value);
         const newAnsweredIds = new Set(state.answeredIds).add(clue.id);
+        console.log(`ANSWER_QUESTION reducer: score=${state.score} + ${isCorrect ? '+' : '-'}${clue.value} = ${newScore}, feedback=${isCorrect ? 'correct' : 'incorrect'}`);
         return {
             ...state,
             score: newScore,
@@ -426,24 +428,27 @@ export default function App() {
     if (!gameState.currentClue) return;
 
     const normalizeString = (str) => {
-      // Decode HTML entities, convert to lowercase, remove all non-alphanumeric chars
-      const decoded = decodeHTML(str);
+      // Trim first, decode HTML entities, convert to lowercase, remove all non-alphanumeric
+      const trimmed = String(str).trim();
+      const decoded = decodeHTML(trimmed);
       return decoded
         .toLowerCase()
-        .replace(/[^a-z0-9]/g, '')  // Remove everything except a-z and 0-9
-        .trim();
+        .replace(/[^a-z0-9]/g, '');  // Remove everything except a-z and 0-9
     };
     
     const selectedNorm = normalizeString(selectedOption);
     const answerNorm = normalizeString(gameState.currentClue.answer);
-    
-    // Debug: log both for troubleshooting
-    if (selectedNorm !== answerNorm) {
-      console.log(`Answer mismatch: "${selectedNorm}" vs "${answerNorm}"`);
-      console.log(`Raw: "${selectedOption}" vs "${gameState.currentClue.answer}"`);
-    }
-    
     const isCorrect = selectedNorm === answerNorm;
+    
+    // Always log for debugging
+    console.log('=== ANSWER CHECK ===');
+    console.log('Selected:', selectedOption);
+    console.log('Correct Answer:', gameState.currentClue.answer);
+    console.log('Selected (normalized):', selectedNorm);
+    console.log('Answer (normalized):', answerNorm);
+    console.log('Match:', isCorrect);
+    console.log('Clue object:', gameState.currentClue);
+    console.log('====================');
     
     dispatch({ type: 'ANSWER_QUESTION', payload: { isCorrect, clue: gameState.currentClue } });
 
@@ -459,8 +464,9 @@ export default function App() {
       timerInterval = setInterval(() => {
         dispatch({ type: 'DECREMENT_TIMER' });
       }, 1000);
-    } else if (gameState.timer === 0 && gameState.currentClue && !gameState.isPaused) { // Only expire if not paused
-      // Timer expired
+    } else if (gameState.timer === 0 && gameState.currentClue && !gameState.isPaused && !gameState.feedback) { // Only expire if not paused AND no feedback yet
+      // Timer expired (user didn't answer in time)
+      console.log('Timer expired - dispatching TIMER_EXPIRED');
       dispatch({ type: 'TIMER_EXPIRED' });
       setTimeout(() => {
         dispatch({ type: 'CLOSE_QUESTION' });
@@ -468,7 +474,7 @@ export default function App() {
     }
 
     return () => clearInterval(timerInterval);
-  }, [gameState.currentClue, gameState.timer, dispatch]);
+  }, [gameState.currentClue, gameState.timer, dispatch, gameState.isPaused, gameState.feedback]);
 
   useEffect(() => {
       if(gameState.gameData.length === 0) return;
