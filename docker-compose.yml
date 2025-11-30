@@ -1,9 +1,27 @@
 version: '3.8'
+
 services:
   trivia:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: trivia:latest
     container_name: trivia
+    hostname: trivia
     ports:
       - "8080:80"
+    environment:
+      TZ: Etc/UTC
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - trivia-net
+
+networks:
+  trivia-net:
+    driver: bridge
