@@ -426,15 +426,24 @@ export default function App() {
     if (!gameState.currentClue) return;
 
     const normalizeString = (str) => {
-      // Decode HTML entities, normalize whitespace, remove punctuation, lowercase
+      // Decode HTML entities, convert to lowercase, remove all non-alphanumeric chars
       const decoded = decodeHTML(str);
       return decoded
         .toLowerCase()
-        .replace(/[^\w\s]/g, '') // Remove punctuation
-        .replace(/\s+/g, ' ')     // Normalize whitespace
+        .replace(/[^a-z0-9]/g, '')  // Remove everything except a-z and 0-9
         .trim();
     };
-    const isCorrect = normalizeString(selectedOption) === normalizeString(gameState.currentClue.answer);
+    
+    const selectedNorm = normalizeString(selectedOption);
+    const answerNorm = normalizeString(gameState.currentClue.answer);
+    
+    // Debug: log both for troubleshooting
+    if (selectedNorm !== answerNorm) {
+      console.log(`Answer mismatch: "${selectedNorm}" vs "${answerNorm}"`);
+      console.log(`Raw: "${selectedOption}" vs "${gameState.currentClue.answer}"`);
+    }
+    
+    const isCorrect = selectedNorm === answerNorm;
     
     dispatch({ type: 'ANSWER_QUESTION', payload: { isCorrect, clue: gameState.currentClue } });
 
