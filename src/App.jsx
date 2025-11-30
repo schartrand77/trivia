@@ -288,7 +288,7 @@ export default function App() {
           const sortedQuestions = data.results.sort((a, b) => difficultyMap[a.difficulty] - difficultyMap[b.difficulty]);
 
           newGameData.push({
-            category: data.results[0].category.replace("Entertainment: ", "").replace("Science: ", ""),
+            category: decodeHTML(data.results[0].category).replace("Entertainment: ", "").replace("Science: ", ""),
             clues: sortedQuestions.map((q, index) => ({
               id: `${catId}-${index}-${Math.random().toString(36).substr(2, 9)}`,
               level: index + 1,
