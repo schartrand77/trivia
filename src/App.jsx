@@ -182,6 +182,7 @@ export default function App() {
     const savedPlayerName = localStorage.getItem('trivia_playerName');
     return savedPlayerName ? savedPlayerName : "Player 1";
   });
+  const [currentGamePlayer, setCurrentGamePlayer] = useState(null); // Track which player started this game
   const [showRecords, setShowRecords] = useState(false);
   const [records, setRecords] = useState([]);
 
@@ -253,6 +254,8 @@ export default function App() {
    * @param {number[]} [categoriesToUse] - Optional array of specific category IDs to use.
    */
   const startNewGame = useCallback(async (count, categoriesToUse) => {
+    // Set the current game player when starting a new game
+    setCurrentGamePlayer(playerName);
     dispatch({ type: 'START_NEW_GAME' });
 
               let finalCategoryIds = categoriesToUse;
@@ -315,7 +318,7 @@ export default function App() {
       console.error("Critical error fetching questions:", error);
       dispatch({ type: 'FETCH_FAILED', payload: "Error connecting to Trivia API." });
     } // Missing closing brace for try-catch
-  }, [selectedCategoryIds, selectedDifficulty, dispatch]);
+  }, [selectedCategoryIds, selectedDifficulty, dispatch, playerName]);
 
   const loadGameHistory = useCallback(() => {
     const history = getGameHistory();
@@ -338,12 +341,14 @@ export default function App() {
 
   const saveRecord = useCallback(() => {
     if (gameState.score === 0) return;
-    const player = players.find(p => p.name === playerName);
+    // Use the player who started the game, not the current playerName selection
+    const playerToSave = currentGamePlayer || playerName;
+    const player = players.find(p => p.name === playerToSave);
     if (player) {
       saveGame(player.id, gameState.score);
       loadGameHistory();
     }
-  }, [gameState.score, playerName, players, loadGameHistory]);
+  }, [gameState.score, currentGamePlayer, playerName, players, loadGameHistory]);
 
   /**
    * @param {string} name - The name of the new player.
