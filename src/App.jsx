@@ -1,28 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { HelpCircle, Check, X, Trophy, RefreshCw, Database, User, Shuffle, Loader } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useReducer, createContext, useContext } from 'react'; // Added createContext, useContext
+import Header from './components/Header';
+import QuestionModal from './components/QuestionModal';
+import GameBoard from './components/GameBoard';
+import RecordsModal from './components/RecordsModal';
+import PlayersModal from './components/PlayersModal';
+import FullScreenLoader from './components/Loader';
+import CategoriesModal from './components/CategoriesModal';
+import HowToPlayModal from './components/HowToPlayModal';
+import AboutModal from './components/AboutModal';
+import { initDB, getPlayers, addPlayer, saveGame, getGameHistory, updatePlayer as updatePlayerDB, deletePlayer as deletePlayerDB } from './db';
 
 // --- CONSTANTS ---
-const CATEGORY_IDS = [
-  9,  // General Knowledge
-  10, // Books
-  11, // Film
-  12, // Music
-  17, // Nature
-  18, // Computers
-  21, // Sports
-  22, // Geography
-  23, // History
-  27, // Animals
-  28, // Vehicles
-];
-
-const RANDOM_NAMES = [
-  "Quiz Whiz", "Trivia Titan", "Brainiac", "Fact Finder", "Smarty Pants", 
-  "The Professor", "Logic Lord", "Mind Master", "Guess Guru", "Knowledge Knight", 
-  "Data Duke", "Puzzle Pro", "Memory Maven", "The Sage", "The Oracle"
-];
-
-const CATEGORY_COUNT = 5; // Updated from 4 to 5
+import { CATEGORY_IDS } from './utils/categories';
 
 // --- HELPER: HTML DECODER ---
 const decodeHTML = (html) => {
@@ -34,64 +23,265 @@ const decodeHTML = (html) => {
 // --- HELPER: DELAY ---
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// --- TYPE DEFINITIONS ---
+/**
+ * @typedef {object} Clue
+ * @property {string} id
+ * @property {number} level
+ * @property {number} value
+ * @property {string} question
+ * @property {string} answer
+ * @property {string[]} options
+ */
+
+/**
+ * @typedef {object} CategoryData
+ * @property {string} category
+ * @property {Clue[]} clues
+ */
+
+/**
+ * @typedef {object} GameState
+ * @property {CategoryData[]} gameData
+ * @property {boolean} loading
+ * @property {string} loadingMessage
+ * @property {number} score
+ * @property {Set<string>} answeredIds
+ * @property {Clue|null} currentClue
+ * @property {'correct'|'incorrect'|null} feedback
+ * @property {number} timer // Added timer property
+ * @property {boolean} isPaused // Added isPaused property
+ */
+
+/**
+ * @typedef {'START_NEW_GAME'|'FETCH_SUCCESS'|'FETCH_FAILED'|'SET_LOADING_MESSAGE'|'SET_CURRENT_CLUE'|'ANSWER_QUESTION'|'CLOSE_QUESTION'|'DECREMENT_TIMER'|'TIMER_EXPIRED'|'PAUSE_GAME'|'RESUME_GAME'} ActionType // Added timer and pause related actions
+ */
+
+/**
+ * @typedef {object} Action
+ * @property {ActionType} type
+ * @property {any} [payload]
+ */
+
+
+// --- THEME CONTEXT ---
+export const ThemeContext = createContext(null);
+
+/** @type {GameState} */
+const initialState = {
+  gameData: [],
+  loading: true,
+  loadingMessage: "Initializing...",
+  score: 0,
+  answeredIds: new Set(),
+  currentClue: null,
+  feedback: null,
+  timer: 15, // Initial timer value
+  isPaused: false, // Initialize to not paused
+};
+
+/**
+ * @param {GameState} state
+ * @param {Action} action
+ * @returns {GameState}
+ */
+function gameReducer(state, action) {
+  switch (action.type) {
+    case 'START_NEW_GAME':
+      return {
+        ...state,
+        loading: true,
+        score: 0,
+        answeredIds: new Set(),
+        feedback: null,
+        currentClue: null,
+        gameData: [],
+        timer: 15, // Reset timer
+      };
+    case 'FETCH_SUCCESS':
+      return {
+        ...state,
+        gameData: action.payload,
+        loading: false,
+      };
+    case 'FETCH_FAILED':
+        return {
+            ...state,
+            loadingMessage: action.payload,
+            loading: false, // Stop loading on failure
+        };
+    case 'SET_LOADING_MESSAGE':
+        return {
+            ...state,
+            loadingMessage: action.payload,
+        };
+    case 'SET_CURRENT_CLUE':
+        return {
+            ...state,
+            currentClue: action.payload,
+            feedback: null,
+            timer: 15, // Start timer for new clue
+        };
+    case 'ANSWER_QUESTION':
+        const { isCorrect, clue } = action.payload;
+        const newScore = state.score + (isCorrect ? clue.value : -clue.value);
+        const newAnsweredIds = new Set(state.answeredIds).add(clue.id);
+        return {
+            ...state,
+            score: newScore,
+            answeredIds: newAnsweredIds,
+            feedback: isCorrect ? 'correct' : 'incorrect',
+            timer: 0, // Stop timer after answer
+        };
+    case 'CLOSE_QUESTION':
+        return {
+            ...state,
+            currentClue: null,
+            feedback: null,
+            timer: 0, // Stop timer
+        };
+    case 'DECREMENT_TIMER':
+        return {
+            ...state,
+            timer: state.timer - 1,
+        };
+    case 'TIMER_EXPIRED':
+        // Handle incorrect answer due to timer expiry
+        const expiredScore = state.score - (state.currentClue?.value || 0); // Deduct points
+        const expiredAnsweredIds = new Set(state.answeredIds).add(state.currentClue?.id || '');
+        return {
+            ...state,
+            score: expiredScore,
+            answeredIds: expiredAnsweredIds,
+            feedback: 'incorrect',
+            timer: 0,
+            // currentClue will be set to null by CLOSE_QUESTION after a timeout
+        };
+    case 'PAUSE_GAME':
+        return {
+            ...state,
+            isPaused: true,
+        };
+    case 'RESUME_GAME':
+        return {
+            ...state,
+            isPaused: false,
+        };
+    default:
+      return state;
+  }
+}
+
 export default function App() {
-  // Game State
-  const [gameData, setGameData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMessage, setLoadingMessage] = useState("Initializing...");
-  const [score, setScore] = useState(0);
-  const [answeredIds, setAnsweredIds] = useState(new Set());
-  const [currentClue, setCurrentClue] = useState(null);
-  const [feedback, setFeedback] = useState(null);
-  
-  // User & Records State
-  const [playerName, setPlayerName] = useState("Player 1");
+  const [gameState, dispatch] = useReducer(gameReducer, initialState);
+
+  // User & Records State (not part of the reducer)
+  const [playerName, setPlayerName] = useState(() => {
+    const savedPlayerName = localStorage.getItem('trivia_playerName');
+    return savedPlayerName ? savedPlayerName : "Player 1";
+  });
   const [showRecords, setShowRecords] = useState(false);
   const [records, setRecords] = useState([]);
 
-  // --- INITIALIZATION ---
-  
+  const [players, setPlayers] = useState([]);
+  const [showPlayers, setShowPlayers] = useState(false);
+  const [categoryCount, setCategoryCount] = useState(() => {
+    const savedCount = localStorage.getItem('trivia_categoryCount');
+    return savedCount ? Number(savedCount) : 5;
+  });
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState(() => {
+    const savedCategories = localStorage.getItem('trivia_selectedCategoryIds');
+    return savedCategories ? JSON.parse(savedCategories) : [];
+  }); // New state for selected categories
+  const [showCategoriesModal, setShowCategoriesModal] = useState(false); // New state for categories modal visibility
+  const [showHowToPlayModal, setShowHowToPlayModal] = useState(false); // New state for HowToPlay modal visibility
+  const [showAboutModal, setShowAboutModal] = useState(false); // New state for About modal visibility
+  const [selectedDifficulty, setSelectedDifficulty] = useState(() => {
+    const savedDifficulty = localStorage.getItem('trivia_difficulty');
+    return savedDifficulty ? savedDifficulty : "any";
+  });
+
+  // Dark Mode State
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    // Initialize from localStorage or system preference
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+      return savedTheme === 'dark';
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  // Apply 'dark' class to html element
   useEffect(() => {
-    startNewGame();
-    loadRecords();
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const toggleDarkMode = useCallback(() => {
+    setIsDarkMode(prevMode => !prevMode);
   }, []);
 
-  // --- API & DATA LOGIC ---
+  // Save playerName to localStorage
+  useEffect(() => {
+    localStorage.setItem('trivia_playerName', playerName);
+  }, [playerName]);
 
-  const startNewGame = async () => {
-    setLoading(true);
-    setScore(0);
-    setAnsweredIds(new Set());
-    setFeedback(null);
-    setCurrentClue(null);
-    setGameData([]);
+  // Save selectedCategoryIds to localStorage
+  useEffect(() => {
+    localStorage.setItem('trivia_selectedCategoryIds', JSON.stringify(selectedCategoryIds));
+  }, [selectedCategoryIds]);
 
-    // 1. Pick random unique categories
-    const shuffledCats = [...CATEGORY_IDS].sort(() => 0.5 - Math.random());
-    const selectedCatIds = shuffledCats.slice(0, CATEGORY_COUNT);
+  // Save categoryCount to localStorage
+  useEffect(() => {
+    localStorage.setItem('trivia_categoryCount', categoryCount.toString());
+  }, [categoryCount]);
+
+  // Save selectedDifficulty to localStorage
+  useEffect(() => {
+    localStorage.setItem('trivia_difficulty', selectedDifficulty);
+  }, [selectedDifficulty]);
+
+  /**
+   * @param {number} count - The number of categories to fetch if no specific categories are provided.
+   * @param {number[]} [categoriesToUse] - Optional array of specific category IDs to use.
+   */
+  const startNewGame = useCallback(async (count, categoriesToUse) => {
+    dispatch({ type: 'START_NEW_GAME' });
+
+              let finalCategoryIds = categoriesToUse;
+              if (!finalCategoryIds || finalCategoryIds.length === 0) {
+                // Fallback to selectedCategoryIds if provided, otherwise random
+                finalCategoryIds = selectedCategoryIds.length > 0 
+                  ? selectedCategoryIds 
+                  : [...CATEGORY_IDS].sort(() => 0.5 - Math.random()).slice(0, count);
+              }
+              
+              const newGameData = [];
     
-    const newGameData = [];
-
-    // 2. Fetch questions sequentially to avoid Rate Limiting (Code 429/5)
-    try {
-      for (let i = 0; i < selectedCatIds.length; i++) {
-        const catId = selectedCatIds[i];
-        setLoadingMessage(`Fetching Category ${i + 1} of ${CATEGORY_COUNT}...`);
-
-        // Add a small delay between requests to be polite to the API
-        if (i > 0) await wait(1200); 
-
-        try {
-          const res = await fetch(`https://opentdb.com/api.php?amount=5&category=${catId}&type=multiple`);
-          const data = await res.json();
-
-          // Check for API errors or empty results
+              try {
+                for (let i = 0; i < finalCategoryIds.length; i++) {
+                  const catId = finalCategoryIds[i];
+                  dispatch({ type: 'SET_LOADING_MESSAGE', payload: `Fetching Category ${i + 1} of ${finalCategoryIds.length}...` });
+    
+                  if (i > 0) await wait(5000); 
+    
+                  try {
+                    let url = `https://opentdb.com/api.php?amount=5&category=${catId}&type=multiple`;
+                    if (selectedDifficulty !== "any") {
+                      url += `&difficulty=${selectedDifficulty}`;
+                    }
+                    const res = await fetch(url);
+                    const data = await res.json();
           if (!data.results || data.results.length === 0) {
             console.warn(`Category ${catId} failed or has no data. Skipping.`);
             continue;
           }
 
-          // Sort by difficulty (easy -> hard) to simulate level progression
           const difficultyMap = { easy: 1, medium: 2, hard: 3 };
           const sortedQuestions = data.results.sort((a, b) => difficultyMap[a.difficulty] - difficultyMap[b.difficulty]);
 
@@ -99,13 +289,13 @@ export default function App() {
             category: data.results[0].category.replace("Entertainment: ", "").replace("Science: ", ""),
             clues: sortedQuestions.map((q, index) => ({
               id: `${catId}-${index}-${Math.random().toString(36).substr(2, 9)}`,
-              level: index + 1, // Number 1-5 instead of $
-              value: (index + 1) * 10, // Internal score value
+              level: index + 1,
+              value: (index + 1) * 10,
               question: decodeHTML(q.question),
               answer: decodeHTML(q.correct_answer),
               options: [...q.incorrect_answers, q.correct_answer]
                 .map(decodeHTML)
-                .sort(() => Math.random() - 0.5) // Shuffle options
+                .sort(() => Math.random() - 0.5)
             }))
           });
         } catch (innerError) {
@@ -114,311 +304,251 @@ export default function App() {
       }
 
       if (newGameData.length === 0) {
-        setLoadingMessage("Failed to load questions. Please try again.");
+        dispatch({ type: 'FETCH_FAILED', payload: "Failed to load questions. Please try again." });
         return;
       }
 
-      setGameData(newGameData);
+      dispatch({ type: 'FETCH_SUCCESS', payload: newGameData });
     } catch (error) {
       console.error("Critical error fetching questions:", error);
-      setLoadingMessage("Error connecting to Trivia API.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      dispatch({ type: 'FETCH_FAILED', payload: "Error connecting to Trivia API." });
+    } // Missing closing brace for try-catch
+  }, [selectedCategoryIds, selectedDifficulty, dispatch]);
 
-  // --- RECORDS (SQLite Simulation using localStorage) ---
-  
-  const loadRecords = () => {
-    try {
-      const saved = localStorage.getItem('trivia_records');
-      if (saved) setRecords(JSON.parse(saved));
-    } catch (e) {
-      console.error("Failed to load records", e);
-    }
-  };
+  const loadGameHistory = useCallback(() => {
+    const history = getGameHistory();
+    setRecords(history);
+  }, []);
 
-  const saveRecord = () => {
-    // Only save if score is non-zero to avoid spam
-    if (score === 0) return; 
-
-    const newRecord = {
-      id: Date.now(),
-      name: playerName,
-      score: score,
-      date: new Date().toLocaleDateString()
-    };
-    
-    const updatedRecords = [newRecord, ...records].slice(0, 10); // Keep top 10 recent
-    setRecords(updatedRecords);
-    localStorage.setItem('trivia_records', JSON.stringify(updatedRecords));
-  };
-
-  // --- ACTIONS ---
-
-  const randomizeName = () => {
-    const randomName = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
-    setPlayerName(randomName);
-  };
-
-  const handleClueClick = (clue) => {
-    if (answeredIds.has(clue.id)) return;
-    setCurrentClue(clue);
-    setFeedback(null);
-  };
-
-  const handleAnswer = (selectedOption) => {
-    if (!currentClue) return;
-
-    const isCorrect = selectedOption === currentClue.answer;
-    
-    if (isCorrect) {
-      setScore((prev) => prev + currentClue.value);
-      setFeedback('correct');
-    } else {
-      setScore((prev) => prev - currentClue.value); // Optional penalty
-      setFeedback('incorrect');
-    }
-
-    setAnsweredIds((prev) => {
-      const newSet = new Set(prev).add(currentClue.id);
-      // Check if game is over (all questions answered)
-      const totalQuestions = gameData.length * 5;
-      if (newSet.size === totalQuestions) {
-        setTimeout(saveRecord, 2000); // Auto-save on finish
+  useEffect(() => {
+    const initialize = async () => {
+      await initDB();
+      const players = getPlayers();
+      setPlayers(players);
+      if (players.length > 0) {
+        setPlayerName(players[0].name);
       }
-      return newSet;
-    });
+      loadGameHistory();
+      startNewGame(5, selectedCategoryIds);
+    };
+    initialize();
+  }, [loadGameHistory, startNewGame, selectedCategoryIds]);
+
+  const saveRecord = useCallback(() => {
+    if (gameState.score === 0) return;
+    const player = players.find(p => p.name === playerName);
+    if (player) {
+      saveGame(player.id, gameState.score);
+      loadGameHistory();
+    }
+  }, [gameState.score, playerName, players, loadGameHistory]);
+
+  /**
+   * @param {string} name - The name of the new player.
+   * @returns {boolean} True if the player was added successfully, false otherwise.
+   */
+  const addNewPlayer = useCallback((name) => {
+    const result = addPlayer(name);
+    if (result.success) {
+      const newPlayers = getPlayers();
+      setPlayers(newPlayers);
+      return true;
+    }
+    alert(result.error);
+    return false;
+  }, []);
+
+  const randomizePlayer = useCallback(() => {
+    if (players.length > 0) {
+      const randomPlayer = players[Math.floor(Math.random() * players.length)];
+      setPlayerName(randomPlayer.name);
+    }
+  }, [players]);
+
+  /**
+   * @param {number} id - The ID of the player to update.
+   * @param {string} newName - The new name for the player.
+   * @returns {boolean} True if the player was updated successfully, false otherwise.
+   */
+  const onUpdatePlayer = useCallback((id, newName) => {
+    const result = updatePlayerDB(id, newName);
+    if (result.success) {
+      const newPlayers = getPlayers();
+      setPlayers(newPlayers);
+      return true;
+    }
+    alert(result.error);
+    return false;
+  }, []);
+
+  /**
+   * @param {number} id - The ID of the player to delete.
+   * @returns {boolean} True if the player was deleted successfully, false otherwise.
+   */
+  const onDeletePlayer = useCallback((id) => {
+    const result = deletePlayerDB(id);
+    if (result.success) {
+      const newPlayers = getPlayers();
+      setPlayers(newPlayers);
+      // If the deleted player was the current player, reset playerName
+      if (playerName === players.find(p => p.id === id)?.name) {
+        setPlayerName(newPlayers.length > 0 ? newPlayers[0].name : "Player 1");
+      }
+      return true;
+    }
+    alert(result.error);
+    return false;
+  }, [playerName, players]);
+
+  const onSaveCategories = useCallback((categories) => {
+    setSelectedCategoryIds(categories);
+    setShowCategoriesModal(false);
+    // Optionally, start a new game with the selected categories immediately
+    // startNewGame(categories.length, categories); 
+  }, []);
+
+  const onCancelCategories = useCallback(() => {
+    setShowCategoriesModal(false);
+  }, []);
+
+  /**
+   * @param {Clue} clue - The clue object that was clicked.
+   */
+  const handleClueClick = useCallback((clue) => {
+    if (gameState.answeredIds.has(clue.id)) return;
+    dispatch({ type: 'SET_CURRENT_CLUE', payload: clue });
+  }, [gameState.answeredIds]);
+
+  /**
+   * @param {string} selectedOption - The option selected by the user.
+   */
+  const handleAnswer = useCallback((selectedOption) => {
+    if (!gameState.currentClue) return;
+
+    const normalizeString = (str) => {
+      // Decode HTML entities, normalize whitespace, remove punctuation, lowercase
+      const decoded = decodeHTML(str);
+      return decoded
+        .toLowerCase()
+        .replace(/[^\w\s]/g, '') // Remove punctuation
+        .replace(/\s+/g, ' ')     // Normalize whitespace
+        .trim();
+    };
+    const isCorrect = normalizeString(selectedOption) === normalizeString(gameState.currentClue.answer);
+    
+    dispatch({ type: 'ANSWER_QUESTION', payload: { isCorrect, clue: gameState.currentClue } });
 
     setTimeout(() => {
-      setCurrentClue(null);
-      setFeedback(null);
+      dispatch({ type: 'CLOSE_QUESTION' });
     }, 1500);
-  };
+  }, [gameState.currentClue]);
 
-  // --- RENDER ---
+  // Timer logic
+  useEffect(() => {
+    let timerInterval;
+    if (gameState.currentClue && gameState.timer > 0 && !gameState.isPaused) { // Only decrement if not paused
+      timerInterval = setInterval(() => {
+        dispatch({ type: 'DECREMENT_TIMER' });
+      }, 1000);
+    } else if (gameState.timer === 0 && gameState.currentClue && !gameState.isPaused) { // Only expire if not paused
+      // Timer expired
+      dispatch({ type: 'TIMER_EXPIRED' });
+      setTimeout(() => {
+        dispatch({ type: 'CLOSE_QUESTION' });
+      }, 1500); // Close after showing feedback
+    }
+
+    return () => clearInterval(timerInterval);
+  }, [gameState.currentClue, gameState.timer, dispatch]);
+
+  useEffect(() => {
+      if(gameState.gameData.length === 0) return;
+      const totalQuestions = gameState.gameData.length * 5;
+      if (gameState.answeredIds.size === totalQuestions) {
+          setTimeout(saveRecord, 2000);
+      }
+  }, [gameState.answeredIds, gameState.gameData.length, saveRecord]);
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans text-slate-800 flex flex-col">
-      
-      {/* HEADER */}
-      <header className="bg-indigo-700 text-white shadow-lg sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <HelpCircle className="w-8 h-8 text-yellow-400" />
-            <h1 className="text-xl font-bold tracking-wider uppercase hidden sm:block">Trivia Master</h1>
-          </div>
-          
-          <div className="flex items-center space-x-4 md:space-x-6">
-            
-            {/* Player Name Randomizer */}
-            <div className="flex items-center bg-indigo-800 rounded-full px-3 py-1 space-x-2 border border-indigo-600">
-              <User className="w-4 h-4 text-indigo-300" />
-              <input 
-                value={playerName} 
-                onChange={(e) => setPlayerName(e.target.value)}
-                className="bg-transparent border-none text-white text-sm w-24 md:w-32 focus:ring-0" 
+    <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 text-slate-800 font-sans flex flex-col">
+        <Header
+          playerName={playerName}
+          setPlayerName={setPlayerName}
+          randomizePlayer={randomizePlayer}
+          score={gameState.score}
+          setShowRecords={setShowRecords}
+          setShowPlayers={setShowPlayers}
+          saveRecord={saveRecord}
+          startNewGame={() => {
+            if (gameState.score > 0) {
+              const confirmStart = window.confirm(
+                `You have an unsaved score of ${gameState.score}. Are you sure you want to start a new game and lose your current progress?`
+              );
+              if (!confirmStart) {
+                return;
+              }
+            }
+            startNewGame(categoryCount);
+          }}
+          categoryCount={categoryCount}
+          setCategoryCount={setCategoryCount}
+          players={players}
+          difficulty={selectedDifficulty}
+          setDifficulty={setSelectedDifficulty}
+          currentScore={gameState.score} // Pass current score for confirmation logic
+        />
+
+        <main className="flex-grow p-4 md:p-8 overflow-auto flex justify-center items-start">
+          {gameState.loading ? (
+            <FullScreenLoader message={gameState.loadingMessage} />
+          ) : (
+            <GameBoard
+              gameData={gameState.gameData}
+              answeredIds={gameState.answeredIds}
+              handleClueClick={handleClueClick}
+            />
+          )}
+        </main>
+
+              <QuestionModal
+                currentClue={gameState.currentClue}
+                handleAnswer={handleAnswer}
+                feedback={gameState.feedback}
+                timer={gameState.timer} // Pass timer value
+                isPaused={gameState.isPaused} // Pass isPaused value
+                onClose={() => dispatch({ type: 'CLOSE_QUESTION' })}
               />
-              <button onClick={randomizeName} title="Random Name">
-                <Shuffle className="w-4 h-4 text-yellow-400 hover:rotate-180 transition-transform" />
-              </button>
-            </div>
-
-            {/* Score */}
-            <div className="flex flex-col items-end min-w-[60px]">
-              <span className="text-[10px] text-indigo-200 uppercase font-semibold">Score</span>
-              <span className={`text-xl font-black leading-none tabular-nums ${score < 0 ? 'text-red-300' : 'text-white'}`}>
-                {score}
-              </span>
-            </div>
-
-            {/* Controls */}
-            <div className="flex space-x-1">
-              <button 
-                onClick={() => setShowRecords(true)}
-                className="p-2 hover:bg-indigo-600 rounded-full transition-colors"
-                title="History / Records"
-              >
-                <Database className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={() => { saveRecord(); startNewGame(); }}
-                className="p-2 hover:bg-indigo-600 rounded-full transition-colors"
-                title="Restart Game"
-              >
-                <RefreshCw className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* MAIN CONTENT */}
-      <main className="flex-grow p-4 md:p-8 overflow-auto flex justify-center items-start">
+        <RecordsModal
+          showRecords={showRecords}
+          setShowRecords={setShowRecords}
+          records={records}
+        />
+              <PlayersModal
+                show={showPlayers}
+                onClose={() => setShowPlayers(false)}
+                players={players}
+                onAddPlayer={addNewPlayer}
+                onUpdatePlayer={onUpdatePlayer}
+                onDeletePlayer={onDeletePlayer}
+              />
         
-        {loading ? (
-          <div className="flex flex-col items-center justify-center h-64 space-y-4">
-            <Loader className="w-12 h-12 text-indigo-600 animate-spin" />
-            <p className="text-indigo-800 font-medium animate-pulse">{loadingMessage}</p>
-          </div>
-        ) : (
-          <div className="bg-blue-900 p-2 rounded-xl shadow-2xl overflow-hidden max-w-7xl w-full border-4 border-blue-950">
-            {/* GRID */}
-            {/* We use inline styles for columns to support dynamic numbering safely */}
-            <div 
-              className="grid gap-2 min-w-[300px] md:min-w-[600px]"
-              style={{ gridTemplateColumns: `repeat(${gameData.length}, minmax(0, 1fr))` }}
-            > 
-              
-              {/* HEADERS */}
-              {gameData.map((category, idx) => (
-                <div key={idx} className="bg-indigo-800 h-24 flex items-center justify-center p-2 text-center rounded shadow-inner">
-                  <h2 className="text-white font-bold text-xs md:text-sm lg:text-base uppercase tracking-widest text-shadow line-clamp-3">
-                    {category.category}
-                  </h2>
-                </div>
-              ))}
-
-              {/* CELLS (Transposed) */}
-              {[0, 1, 2, 3, 4].map((rowIndex) => (
-                <React.Fragment key={`row-${rowIndex}`}>
-                  {gameData.map((cat, catIndex) => {
-                    const clue = cat.clues[rowIndex];
-                    if (!clue) return <div key={catIndex} className="bg-blue-950/50"></div>; // Safety
-                    
-                    const isAnswered = answeredIds.has(clue.id);
-
-                    return (
-                      <button
-                        key={clue.id}
-                        disabled={isAnswered}
-                        onClick={() => handleClueClick(clue)}
-                        className={`
-                          relative h-20 md:h-28 flex items-center justify-center rounded 
-                          transition-all duration-300 transform border-b-4
-                          ${isAnswered 
-                            ? 'bg-blue-950 border-transparent cursor-default' 
-                            : 'bg-blue-600 border-blue-800 hover:bg-blue-500 hover:border-blue-700 hover:-translate-y-1 active:translate-y-0'
-                          }
-                        `}
-                      >
-                        {isAnswered ? (
-                          <span className="opacity-0">-</span> 
-                        ) : (
-                          <span className="text-yellow-400 font-black text-3xl md:text-5xl text-shadow-sm drop-shadow-lg">
-                            {clue.level}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
+              <CategoriesModal
+                show={showCategoriesModal}
+                onClose={onCancelCategories}
+                onSave={onSaveCategories}
+                initialSelectedCategoryIds={selectedCategoryIds}
+              />
+              <HowToPlayModal
+                show={showHowToPlayModal}
+                onClose={() => setShowHowToPlayModal(false)}
+              />
+              <AboutModal
+                show={showAboutModal}
+                onClose={() => setShowAboutModal(false)}
+              />
             </div>
-          </div>
-        )}
-      </main>
-
-      {/* QUESTION MODAL */}
-      {currentClue && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden transform transition-all scale-100">
-            <div className="bg-indigo-700 p-6 flex justify-between items-center">
-              <span className="text-indigo-200 font-bold tracking-widest uppercase text-sm">
-                Difficulty Level {currentClue.level}
-              </span>
-              <button onClick={() => setCurrentClue(null)} className="text-white hover:bg-indigo-600 p-1 rounded-full">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="p-8 text-center">
-              <h3 className="text-xl md:text-2xl font-serif text-slate-800 mb-8 leading-relaxed">
-                {currentClue.question}
-              </h3>
-
-              {feedback ? (
-                <div className={`flex flex-col items-center justify-center py-6 animate-in zoom-in duration-300 ${feedback === 'correct' ? 'text-green-600' : 'text-red-500'}`}>
-                  {feedback === 'correct' ? (
-                    <>
-                      <Check className="w-16 h-16 mb-2" />
-                      <span className="text-2xl font-bold">Correct!</span>
-                    </>
-                  ) : (
-                    <>
-                      <X className="w-16 h-16 mb-2" />
-                      <div className="text-center">
-                        <span className="text-2xl font-bold block">Incorrect</span>
-                        <span className="text-slate-500 text-lg mt-2">Answer: {currentClue.answer}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {currentClue.options.map((option, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleAnswer(option)}
-                      className="p-4 rounded-xl border-2 border-slate-100 bg-slate-50 hover:border-indigo-500 hover:bg-indigo-50 text-slate-700 font-semibold transition-all text-sm md:text-base text-left"
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* RECORDS MODAL */}
-      {showRecords && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="bg-slate-800 text-white p-4 flex justify-between items-center">
-              <div className="flex items-center space-x-2">
-                <Trophy className="w-5 h-5 text-yellow-400" />
-                <h3 className="font-bold uppercase tracking-wide">Recent Records</h3>
-              </div>
-              <button onClick={() => setShowRecords(false)}><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-0 max-h-96 overflow-y-auto">
-              {records.length === 0 ? (
-                <div className="p-8 text-center text-slate-400">No records found yet.</div>
-              ) : (
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-500 font-semibold border-b">
-                    <tr>
-                      <th className="p-3">Date</th>
-                      <th className="p-3">Player</th>
-                      <th className="p-3 text-right">Score</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {records.map((rec) => (
-                      <tr key={rec.id} className="border-b last:border-0 hover:bg-slate-50">
-                        <td className="p-3 text-slate-500">{rec.date}</td>
-                        <td className="p-3 font-medium text-slate-800">{rec.name}</td>
-                        <td className="p-3 text-right font-bold text-indigo-600">{rec.score}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            <div className="p-3 bg-slate-50 border-t text-xs text-center text-slate-400">
-              Records stored locally in browser
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* STYLES */}
-      <style>{`
-        .text-shadow { text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
-        .text-shadow-sm { text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
-      `}</style>
-    </div>
+    </ThemeContext.Provider>
   );
 }
+
