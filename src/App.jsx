@@ -484,6 +484,18 @@ export default function App() {
       }
   }, [gameState.answeredIds, gameState.gameData.length, saveRecord]);
 
+  const handleEndGame = useCallback(() => {
+    if (gameState.score !== 0) {
+      const confirmEnd = window.confirm(
+        `Your current score is ${gameState.score}. Do you want to save this score and end the game?`
+      );
+      if (confirmEnd) {
+        saveRecord();
+      }
+    }
+    startNewGame(categoryCount);
+  }, [gameState.score, categoryCount, saveRecord, startNewGame]);
+
   return (
     <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 text-slate-800 font-sans flex flex-col">
@@ -506,6 +518,7 @@ export default function App() {
             }
             startNewGame(categoryCount);
           }}
+          onEndGame={handleEndGame}
           categoryCount={categoryCount}
           setCategoryCount={setCategoryCount}
           players={players}

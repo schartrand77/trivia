@@ -1,5 +1,5 @@
 import React, { useContext } from 'react'; // Added useContext
-import { HelpCircle, User, Shuffle, Database, RefreshCw, UserPlus, Sun, Moon, Info, Play, Pause } from 'lucide-react'; // Added Sun, Moon, Info, Play, Pause icons
+import { HelpCircle, User, Shuffle, Database, RefreshCw, UserPlus, Sun, Moon, Info, Play, Pause, LogOut } from 'lucide-react'; // Added LogOut icon
 import { ThemeContext } from '../App'; // Import ThemeContext
 
 const Header = ({
@@ -23,6 +23,7 @@ const Header = ({
   isPaused,
   onPauseGame,
   onResumeGame,
+  onEndGame, // New prop for ending the game
 }) => {
   const { isDarkMode, toggleDarkMode } = useContext(ThemeContext); // Use theme context
 
@@ -132,6 +133,13 @@ const Header = ({
               title="Restart Game"
             >
               <RefreshCw className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={onEndGame}
+              className="p-2 hover:bg-red-600 rounded-full transition-colors"
+              title="End Game"
+            >
+              <LogOut className="w-5 h-5" />
             </button>
             {/* Pause/Play Button */}
             {isPaused ? (
