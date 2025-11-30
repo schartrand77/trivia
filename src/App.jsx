@@ -338,11 +338,14 @@ export default function App() {
       await initDB();
       const players = getPlayers();
       setPlayers(players);
+      let firstPlayerName = "Player 1";
       if (players.length > 0) {
-        setPlayerName(players[0].name);
+        firstPlayerName = players[0].name;
+        setPlayerName(firstPlayerName);
       }
       loadGameHistory();
-      startNewGame(5, selectedCategoryIds);
+      // Pass the first player name explicitly to ensure it's captured correctly
+      startNewGame(5, selectedCategoryIds, firstPlayerName);
     };
     initialize();
   }, [loadGameHistory, startNewGame, selectedCategoryIds]);
@@ -506,8 +509,8 @@ export default function App() {
         saveRecord();
       }
     }
-    startNewGame(categoryCount);
-  }, [gameState.correctAnswers, gameState.wrongAnswers, categoryCount, saveRecord, startNewGame]);
+    startNewGame(categoryCount, undefined, playerName);
+  }, [gameState.correctAnswers, gameState.wrongAnswers, categoryCount, playerName, saveRecord, startNewGame]);
 
   return (
     <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
@@ -531,7 +534,7 @@ export default function App() {
                 return;
               }
             }
-            startNewGame(categoryCount);
+            startNewGame(categoryCount, undefined, playerName);
           }}
           onEndGame={handleEndGame}
           categoryCount={categoryCount}
