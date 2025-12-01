@@ -4,6 +4,7 @@ import QuestionModal from './components/QuestionModal';
 import GameBoard from './components/GameBoard';
 import RecordsModal from './components/RecordsModal';
 import PlayersModal from './components/PlayersModal';
+import PlayerSelectorModal from './components/PlayerSelectorModal';
 import FullScreenLoader from './components/Loader';
 import CategoriesModal from './components/CategoriesModal';
 import HowToPlayModal from './components/HowToPlayModal';
@@ -189,7 +190,6 @@ export default function App() {
     const savedPlayerName = localStorage.getItem('trivia_playerName');
     return savedPlayerName ? savedPlayerName : "Player 1";
   });
-  const [currentGamePlayer, setCurrentGamePlayer] = useState(null); // Track which player started this game
   const [showRecords, setShowRecords] = useState(false);
   const [records, setRecords] = useState([]);
 
@@ -262,8 +262,6 @@ export default function App() {
    * @param {string} [playerNameToSet] - The player name starting the game (defaults to current playerName).
    */
   const startNewGame = useCallback(async (count, categoriesToUse, playerNameToSet = playerName) => {
-    // Set the current game player when starting a new game
-    setCurrentGamePlayer(playerNameToSet);
     dispatch({ type: 'START_NEW_GAME' });
 
               let finalCategoryIds = categoriesToUse;
@@ -352,14 +350,13 @@ export default function App() {
 
   const saveRecord = useCallback(() => {
     if (gameState.correctAnswers === 0 && gameState.wrongAnswers === 0) return;
-    // Use the player who started the game, not the current playerName selection
-    const playerToSave = currentGamePlayer || playerName;
-    const player = players.find(p => p.name === playerToSave);
+    // Save the currently selected player's data
+    const player = players.find(p => p.name === playerName);
     if (player) {
       saveGame(player.id, gameState.correctAnswers, gameState.wrongAnswers);
       loadGameHistory();
     }
-  }, [gameState.correctAnswers, gameState.wrongAnswers, currentGamePlayer, playerName, players, loadGameHistory]);
+  }, [gameState.correctAnswers, gameState.wrongAnswers, playerName, players, loadGameHistory]);
 
   /**
    * @param {string} name - The name of the new player.

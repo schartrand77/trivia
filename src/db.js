@@ -1,6 +1,96 @@
 import initSqlJs from 'sql.js';
 
 let db = null;
+const DB_NAME = 'trivia_db_v1';
+const DB_STORE_NAME = 'database';
+
+// Helper to save db to IndexedDB
+const saveDBToIndexedDB = async () => {
+  try {
+    const data = db.export();
+    const blob = new Blob([data], { type: 'application/octet-stream' });
+    
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      
+      request.onupgradeneeded = (event) => {
+        const upgradeDb = event.target.result;
+        if (!upgradeDb.objectStoreNames.contains(DB_STORE_NAME)) {
+          upgradeDb.createObjectStore(DB_STORE_NAME);
+        }
+      };
+      
+      request.onsuccess = (event) => {
+        const indexedDb = event.target.result;
+        const transaction = indexedDb.transaction(DB_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(DB_STORE_NAME);
+        const putRequest = store.put(blob, 'database');
+        
+        putRequest.onsuccess = () => {
+          indexedDb.close();
+          resolve();
+        };
+        putRequest.onerror = () => {
+          indexedDb.close();
+          reject(putRequest.error);
+        };
+      };
+      
+      request.onerror = () => {
+        reject(request.error);
+      };
+    });
+  } catch (err) {
+    console.error('Failed to save database to IndexedDB:', err);
+  }
+};
+
+// Helper to load db from IndexedDB
+const loadDBFromIndexedDB = async (SQL) => {
+  return new Promise((resolve) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    
+    request.onupgradeneeded = (event) => {
+      const upgradeDb = event.target.result;
+      if (!upgradeDb.objectStoreNames.contains(DB_STORE_NAME)) {
+        upgradeDb.createObjectStore(DB_STORE_NAME);
+      }
+    };
+    
+    request.onsuccess = (event) => {
+      const indexedDb = event.target.result;
+      const transaction = indexedDb.transaction(DB_STORE_NAME, 'readonly');
+      const store = transaction.objectStore(DB_STORE_NAME);
+      const getRequest = store.get('database');
+      
+      getRequest.onsuccess = async (event) => {
+        indexedDb.close();
+        const blob = event.target.result;
+        if (blob) {
+          try {
+            const arrayBuffer = await blob.arrayBuffer();
+            const loadedDb = new SQL.Database(new Uint8Array(arrayBuffer));
+            resolve(loadedDb);
+          } catch (err) {
+            console.error('Failed to load database from IndexedDB:', err);
+            resolve(null);
+          }
+        } else {
+          resolve(null);
+        }
+      };
+      
+      getRequest.onerror = () => {
+        indexedDb.close();
+        resolve(null);
+      };
+    };
+    
+    request.onerror = () => {
+      resolve(null);
+    };
+  });
+};
 
 export const initDB = async () => {
   if (db) return db;
@@ -9,7 +99,17 @@ export const initDB = async () => {
     const SQL = await initSqlJs({
       locateFile: file => `/${file}`
     });
-    db = new SQL.Database();
+    
+    // Try to load existing database from IndexedDB
+    const loadedDb = await loadDBFromIndexedDB(SQL);
+    if (loadedDb) {
+      db = loadedDb;
+      console.log('Loaded database from IndexedDB');
+    } else {
+      db = new SQL.Database();
+      console.log('Created new database');
+    }
+    
     // Create tables if they don't exist
     db.run(`
       CREATE TABLE IF NOT EXISTS players (
@@ -29,6 +129,10 @@ export const initDB = async () => {
         FOREIGN KEY (player_id) REFERENCES players (id)
       );
     `);
+    
+    // Save the initialized database
+    await saveDBToIndexedDB();
+    
     return db;
   } catch (err) {
     console.error('Failed to initialize database:', err);
@@ -46,6 +150,7 @@ export const addPlayer = (name) => {
   const db = getDB();
   try {
     db.run('INSERT INTO players (name) VALUES (?)', [name]);
+    saveDBToIndexedDB(); // Persist after adding player
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -65,6 +170,7 @@ export const saveGame = (playerId, correctAnswers, wrongAnswers) => {
   const db = getDB();
   const date = new Date().toLocaleDateString();
   db.run('INSERT INTO game_history (player_id, correct_answers, wrong_answers, date) VALUES (?, ?, ?, ?)', [playerId, correctAnswers, wrongAnswers, date]);
+  saveDBToIndexedDB(); // Persist after saving game
 };
 
 export const getGameHistory = () => {
@@ -86,6 +192,7 @@ export const updatePlayer = (id, newName) => {
   const db = getDB();
   try {
     db.run('UPDATE players SET name = ? WHERE id = ?', [newName, id]);
+    saveDBToIndexedDB(); // Persist after updating player
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -97,6 +204,7 @@ export const deletePlayer = (id) => {
   try {
     db.run('DELETE FROM players WHERE id = ?', [id]);
     db.run('DELETE FROM game_history WHERE player_id = ?', [id]); // Delete associated history
+    saveDBToIndexedDB(); // Persist after deleting player
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
