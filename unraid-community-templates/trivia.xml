@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<Container templateVersion="1">
+  <Name>trivia</Name>
+  <DisplayName>Trivia (React)</DisplayName>
+  <Repository>schartrand77/trivia:latest</Repository>
+  <Registry>dockerhub</Registry>
+  <Overview>Trivia React SPA served by nginx. Build and push the Docker image then deploy on Unraid.</Overview>
+  <Author>Stephen Chartrand</Author>
+  <Website>https://github.com/schartrand77/trivia</Website>
+  <Support>https://github.com/schartrand77/trivia/issues</Support>
+  <Network>bridge</Network>
+
+  <Ports>
+    <Port>
+      <ContainerPort>80</ContainerPort>
+      <HostPort>8080</HostPort>
+      <Protocol>tcp</Protocol>
+      <Description>Web UI</Description>
+    </Port>
+  </Ports>
+
+  <Config>
+    <Environment>
+      <Variable>
+        <Name>TZ</Name>
+        <Default>Etc/UTC</Default>
+        <Description>Timezone</Description>
+      </Variable>
+      <Variable>
+        <Name>PUID</Name>
+        <Default>99</Default>
+        <Description>UID for file permissions (optional)</Description>
+      </Variable>
+      <Variable>
+        <Name>PGID</Name>
+        <Default>100</Default>
+        <Description>GID for file permissions (optional)</Description>
+      </Variable>
+    </Environment>
+  </Config>
+
+  <Volumes>
+    <Volume>
+      <Container>/usr/share/nginx/html</Container>
+      <Host></Host>
+      <Description>Optional: bind-mount a directory to serve custom static files</Description>
+    </Volume>
+  </Volumes>
+
+  <PostInst>
+    <Line>This template is pre-configured to use the image <b>schartrand77/trivia:latest</b> from Docker Hub.</Line>
+    <Line>If you want to use a different image, edit the <b>&lt;Repository&gt;</b> field (for example <i>yourname/trivia:latest</i>).</Line>
+    <Line>Set `HostPort` as desired and configure any environment variables.</Line>
+  </PostInst>
+</Container>
