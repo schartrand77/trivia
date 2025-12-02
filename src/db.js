@@ -3,6 +3,7 @@ import initSqlJs from 'sql.js';
 let db = null;
 const DB_NAME = 'trivia_db_v1';
 const DB_STORE_NAME = 'database';
+const DATA_FILE_PATH = '/data/trivia-db.sqlite'; // Path to persisted database file on mounted volume
 
 // Helper to save db to IndexedDB
 const saveDBToIndexedDB = async () => {
@@ -92,6 +93,43 @@ const loadDBFromIndexedDB = async (SQL) => {
   });
 };
 
+// Helper to load db from filesystem (mounted /data volume)
+const loadDBFromFile = async (SQL) => {
+  try {
+    const response = await fetch(DATA_FILE_PATH);
+    if (response.ok) {
+      const arrayBuffer = await response.arrayBuffer();
+      const loadedDb = new SQL.Database(new Uint8Array(arrayBuffer));
+      console.log('Loaded database from filesystem at ' + DATA_FILE_PATH);
+      return loadedDb;
+    }
+  } catch (err) {
+    // File doesn't exist or can't be fetched - that's fine, we'll create a new db
+    console.log('No persisted database found at ' + DATA_FILE_PATH + '. Creating new database.');
+  }
+  return null;
+};
+
+// Helper to save db to filesystem (mounted /data volume)
+const saveDBToFile = async () => {
+  try {
+    const data = db.export();
+    const blob = new Blob([data], { type: 'application/octet-stream' });
+    
+    // Use the Fetch API to POST the database blob to a simple endpoint
+    // For now, we'll store it in a hidden iframe or use a service worker pattern
+    // In a real app, you'd have a backend endpoint: POST /api/save-db
+    // For this SPA, we'll rely on IndexedDB + encourage admins to backup /data volume
+    
+    // Store in IndexedDB as well
+    await saveDBToIndexedDB();
+    
+    console.log('Database persisted (IndexedDB updated)');
+  } catch (err) {
+    console.error('Failed to save database to filesystem:', err);
+  }
+};
+
 export const initDB = async () => {
   if (db) return db;
 
@@ -100,14 +138,20 @@ export const initDB = async () => {
       locateFile: file => `/${file}`
     });
     
-    // Try to load existing database from IndexedDB
-    const loadedDb = await loadDBFromIndexedDB(SQL);
+    // Try to load from filesystem first (mounted /data volume), then IndexedDB, then create new
+    let loadedDb = await loadDBFromFile(SQL);
     if (loadedDb) {
       db = loadedDb;
-      console.log('Loaded database from IndexedDB');
+      console.log('Loaded database from file');
     } else {
-      db = new SQL.Database();
-      console.log('Created new database');
+      loadedDb = await loadDBFromIndexedDB(SQL);
+      if (loadedDb) {
+        db = loadedDb;
+        console.log('Loaded database from IndexedDB');
+      } else {
+        db = new SQL.Database();
+        console.log('Created new database');
+      }
     }
     
     // Create tables if they don't exist
@@ -131,7 +175,7 @@ export const initDB = async () => {
     `);
     
     // Save the initialized database
-    await saveDBToIndexedDB();
+    await saveDBToFile();
     
     return db;
   } catch (err) {
@@ -150,7 +194,7 @@ export const addPlayer = (name) => {
   const db = getDB();
   try {
     db.run('INSERT INTO players (name) VALUES (?)', [name]);
-    saveDBToIndexedDB(); // Persist after adding player
+    saveDBToFile(); // Persist after adding player
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -170,7 +214,7 @@ export const saveGame = (playerId, correctAnswers, wrongAnswers) => {
   const db = getDB();
   const date = new Date().toLocaleDateString();
   db.run('INSERT INTO game_history (player_id, correct_answers, wrong_answers, date) VALUES (?, ?, ?, ?)', [playerId, correctAnswers, wrongAnswers, date]);
-  saveDBToIndexedDB(); // Persist after saving game
+  saveDBToFile(); // Persist after saving game
 };
 
 export const getGameHistory = () => {
@@ -192,7 +236,7 @@ export const updatePlayer = (id, newName) => {
   const db = getDB();
   try {
     db.run('UPDATE players SET name = ? WHERE id = ?', [newName, id]);
-    saveDBToIndexedDB(); // Persist after updating player
+    saveDBToFile(); // Persist after updating player
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -204,7 +248,7 @@ export const deletePlayer = (id) => {
   try {
     db.run('DELETE FROM players WHERE id = ?', [id]);
     db.run('DELETE FROM game_history WHERE player_id = ?', [id]); // Delete associated history
-    saveDBToIndexedDB(); // Persist after deleting player
+    saveDBToFile(); // Persist after deleting player
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };

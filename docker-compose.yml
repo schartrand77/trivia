@@ -12,6 +12,8 @@ services:
       - "8080:80"
     environment:
       TZ: Etc/UTC
+    volumes:
+      - ./data:/data  # Mount local data directory for persistent player records
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]

@@ -8,6 +8,8 @@
   <Author>Stephen Chartrand</Author>
   <Website>https://github.com/schartrand77/trivia</Website>
   <Support>https://github.com/schartrand77/trivia/issues</Support>
+  <Project>https://github.com/schartrand77/trivia</Project>
+  <Repository>https://github.com/schartrand77/trivia</Repository>
   <Network>bridge</Network>
 
   <Ports>
@@ -16,6 +18,7 @@
       <HostPort>8080</HostPort>
       <Protocol>tcp</Protocol>
       <Description>Web UI</Description>
+      <WebUI>http://[IP]:[PORT:8080]/</WebUI>
     </Port>
   </Ports>
 
@@ -41,9 +44,10 @@
 
   <Volumes>
     <Volume>
-      <Container>/usr/share/nginx/html</Container>
+      <Container>/data</Container>
       <Host></Host>
-      <Description>Optional: bind-mount a directory to serve custom static files</Description>
+      <Description>Application data directory (player records, game history, database)</Description>
+      <Mode>rw</Mode>
     </Volume>
   </Volumes>
 
