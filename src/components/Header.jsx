@@ -1,5 +1,5 @@
 import React, { useContext } from 'react'; // Added useContext
-import { HelpCircle, User, Shuffle, Database, RefreshCw, UserPlus, Sun, Moon, Info, Play, Pause, LogOut } from 'lucide-react'; // Added LogOut icon
+import { User, Shuffle, Database, RefreshCw, UserPlus, Sun, Moon, Info, Play, Pause, LogOut, Users, Zap, HelpCircle } from 'lucide-react'; // Added Users icon
 import { ThemeContext } from '../App'; // Import ThemeContext
 
 const Header = ({
@@ -12,6 +12,8 @@ const Header = ({
   currentScore, // New prop for confirmation logic
   setShowRecords,
   setShowPlayers,
+  setShowPlayerSelector, // New prop for player selector modal
+  setShowGroupPlay, // New prop for group play modal
   saveRecord,
   startNewGame,
   categoryCount,
@@ -31,21 +33,20 @@ const Header = ({
 
   return (
     <header className="bg-indigo-700 text-white shadow-lg sticky top-0 z-20">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <HelpCircle className="w-8 h-8 text-yellow-400" />
-          <h1 className="text-xl font-bold tracking-wider uppercase hidden sm:block">Stores Huddle Trivia</h1>
+      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+        <div className="flex items-center h-16">
+          <img src="/banner.png" alt="Stores Huddle Trivia" className="h-full object-contain" />
         </div>
         
-        <div className="flex items-center space-x-4 md:space-x-6">
+        <div className="flex items-center space-x-2 md:space-x-4 flex-wrap justify-end">
           
           {/* Player Selector */}
-          <div className="flex items-center bg-indigo-800 rounded-full px-3 py-1 space-x-2 border border-indigo-600">
-            <User className="w-4 h-4 text-indigo-300" />
+          <div className="flex items-center bg-indigo-800 rounded-full px-2 py-1 space-x-1 border border-indigo-600">
+            <User className="w-3 h-3 text-indigo-300" />
             <select
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
-              className="bg-transparent border-none text-white text-sm focus:ring-0 pr-6" // Added pr-6 for dropdown arrow
+              className="bg-transparent border-none text-white text-xs focus:ring-0 pr-3" // Added pr-6 for dropdown arrow
             >
               {players.length > 0 ? (
                 players.map((player) => (
@@ -57,18 +58,21 @@ const Header = ({
                 <option value="Player 1" className="bg-indigo-700">Player 1</option>
               )}
             </select>
-            <button onClick={randomizePlayer} title="Random Player">
-              <Shuffle className="w-4 h-4 text-yellow-400 hover:rotate-180 transition-transform" />
+            <button onClick={() => setShowPlayerSelector(true)} title="Switch Player" className="p-1">
+              <User className="w-3 h-3 text-yellow-400 hover:text-yellow-300 transition-colors" />
+            </button>
+            <button onClick={randomizePlayer} title="Random Player" className="p-1">
+              <Shuffle className="w-3 h-3 text-yellow-400 hover:rotate-180 transition-transform" />
             </button>
           </div>
 
           {/* Category Count Selector */}
-          <div className="flex items-center bg-indigo-800 rounded-full px-3 py-1 space-x-2 border border-indigo-600">
-            <span className="text-indigo-300 text-sm">Categories:</span>
+          <div className="flex items-center bg-indigo-800 rounded-full px-2 py-1 space-x-1 border border-indigo-600">
+            <span className="text-indigo-300 text-xs">Categories:</span>
             <select
               value={categoryCount}
               onChange={(e) => setCategoryCount(Number(e.target.value))}
-              className="bg-transparent border-none text-white text-sm focus:ring-0"
+              className="bg-transparent border-none text-white text-xs focus:ring-0"
             >
               {[...Array(8).keys()].map(i => (
                 <option key={i + 3} value={i + 3} className="bg-indigo-700">{i + 3}</option>
@@ -79,17 +83,17 @@ const Header = ({
               className="p-1 hover:bg-indigo-600 rounded-full transition-colors"
               title="Choose Specific Categories"
             >
-              <HelpCircle className="w-4 h-4 text-yellow-400" /> {/* Reusing HelpCircle for now */}
+              <Zap className="w-4 h-4 text-yellow-400" />
             </button>
           </div>
 
           {/* Difficulty Selector */}
-          <div className="flex items-center bg-indigo-800 rounded-full px-3 py-1 space-x-2 border border-indigo-600">
-            <span className="text-indigo-300 text-sm">Difficulty:</span>
+          <div className="flex items-center bg-indigo-800 rounded-full px-2 py-1 space-x-1 border border-indigo-600">
+            <span className="text-indigo-300 text-xs">Difficulty:</span>
             <select
               value={difficulty}
               onChange={(e) => setDifficulty(e.target.value)}
-              className="bg-transparent border-none text-white text-sm focus:ring-0"
+              className="bg-transparent border-none text-white text-xs focus:ring-0"
             >
               <option value="any" className="bg-indigo-700">Any</option>
               <option value="easy" className="bg-indigo-700">Easy</option>
@@ -123,6 +127,13 @@ const Header = ({
               title="Manage Players"
             >
               <UserPlus className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setShowGroupPlay(true)}
+              className="p-2 hover:bg-indigo-600 rounded-full transition-colors"
+              title="Group Play - Select & Randomize Players"
+            >
+              <Users className="w-5 h-5" />
             </button>
             <button 
               onClick={() => setShowRecords(true)}

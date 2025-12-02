@@ -5,6 +5,7 @@ import GameBoard from './components/GameBoard';
 import RecordsModal from './components/RecordsModal';
 import PlayersModal from './components/PlayersModal';
 import PlayerSelectorModal from './components/PlayerSelectorModal';
+import GroupPlayModal from './components/GroupPlayModal';
 import FullScreenLoader from './components/Loader';
 import CategoriesModal from './components/CategoriesModal';
 import HowToPlayModal from './components/HowToPlayModal';
@@ -195,6 +196,10 @@ export default function App() {
 
   const [players, setPlayers] = useState([]);
   const [showPlayers, setShowPlayers] = useState(false);
+  const [showPlayerSelector, setShowPlayerSelector] = useState(false);
+  const [showGroupPlay, setShowGroupPlay] = useState(false);
+  const [playQueue, setPlayQueue] = useState([]); // Queue of players for group play
+  const [currentQueueIndex, setCurrentQueueIndex] = useState(0); // Track current player in queue
   const [categoryCount, setCategoryCount] = useState(() => {
     const savedCount = localStorage.getItem('trivia_categoryCount');
     return savedCount ? Number(savedCount) : 5;
@@ -342,8 +347,13 @@ export default function App() {
         setPlayerName(firstPlayerName);
       }
       loadGameHistory();
-      // Pass the first player name explicitly to ensure it's captured correctly
-      startNewGame(5, selectedCategoryIds, firstPlayerName);
+      // Show player selector modal on app load if there are players
+      if (players.length > 0) {
+        setShowPlayerSelector(true);
+      } else {
+        // If no players, start game with default player
+        startNewGame(5, selectedCategoryIds, firstPlayerName);
+      }
     };
     initialize();
   }, [loadGameHistory, startNewGame, selectedCategoryIds]);
@@ -372,6 +382,54 @@ export default function App() {
     alert(result.error);
     return false;
   }, []);
+
+  const handleSelectPlayer = useCallback((playerName) => {
+    setPlayerName(playerName);
+    setShowPlayerSelector(false);
+    startNewGame(categoryCount, selectedCategoryIds, playerName);
+  }, [categoryCount, selectedCategoryIds, startNewGame]);
+
+  const handleAddNewPlayerFromSelector = useCallback((name) => {
+    if (addNewPlayer(name)) {
+      // After adding player, automatically select them and start the game
+      setPlayerName(name);
+      setShowPlayerSelector(false);
+      startNewGame(categoryCount, selectedCategoryIds, name);
+    }
+  }, [categoryCount, selectedCategoryIds, startNewGame]);
+
+  const handleAddNewPlayerFromGroupPlay = useCallback((name) => {
+    if (addNewPlayer(name)) {
+      // After adding player, the GroupPlayModal will refresh its player list
+      const updatedPlayers = getPlayers();
+      setPlayers(updatedPlayers);
+    }
+  }, []);
+
+  const handleStartGroupPlay = useCallback((playOrder) => {
+    setPlayQueue(playOrder);
+    setCurrentQueueIndex(0);
+    setShowGroupPlay(false);
+    // Start the game with the first player in the queue
+    setPlayerName(playOrder[0].name);
+    startNewGame(categoryCount, selectedCategoryIds, playOrder[0].name);
+  }, [categoryCount, selectedCategoryIds, startNewGame]);
+
+  const handleNextPlayerInQueue = useCallback(() => {
+    if (playQueue.length === 0) return;
+    const nextIndex = currentQueueIndex + 1;
+    if (nextIndex < playQueue.length) {
+      setCurrentQueueIndex(nextIndex);
+      const nextPlayer = playQueue[nextIndex];
+      setPlayerName(nextPlayer.name);
+      startNewGame(categoryCount, selectedCategoryIds, nextPlayer.name);
+    } else {
+      // All players have played, reset the queue
+      setPlayQueue([]);
+      setCurrentQueueIndex(0);
+      alert('All players have completed their games!');
+    }
+  }, [playQueue, currentQueueIndex, categoryCount, selectedCategoryIds, startNewGame]);
 
   const randomizePlayer = useCallback(() => {
     if (players.length > 0) {
@@ -506,8 +564,13 @@ export default function App() {
         saveRecord();
       }
     }
-    startNewGame(categoryCount, undefined, playerName);
-  }, [gameState.correctAnswers, gameState.wrongAnswers, categoryCount, playerName, saveRecord, startNewGame]);
+    // If there's a play queue, load the next player; otherwise start a regular new game
+    if (playQueue.length > 0) {
+      handleNextPlayerInQueue();
+    } else {
+      startNewGame(categoryCount, undefined, playerName);
+    }
+  }, [gameState.correctAnswers, gameState.wrongAnswers, categoryCount, playerName, saveRecord, startNewGame, playQueue, handleNextPlayerInQueue]);
 
   return (
     <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
@@ -521,6 +584,8 @@ export default function App() {
           wrongAnswers={gameState.wrongAnswers}
           setShowRecords={setShowRecords}
           setShowPlayers={setShowPlayers}
+          setShowPlayerSelector={setShowPlayerSelector}
+          setShowGroupPlay={setShowGroupPlay}
           saveRecord={saveRecord}
           startNewGame={() => {
             if (gameState.correctAnswers > 0 || gameState.wrongAnswers > 0) {
@@ -574,6 +639,21 @@ export default function App() {
                 onAddPlayer={addNewPlayer}
                 onUpdatePlayer={onUpdatePlayer}
                 onDeletePlayer={onDeletePlayer}
+              />
+
+              <PlayerSelectorModal
+                show={showPlayerSelector}
+                players={players}
+                onSelectPlayer={handleSelectPlayer}
+                onAddNewPlayer={handleAddNewPlayerFromSelector}
+              />
+
+              <GroupPlayModal
+                show={showGroupPlay}
+                players={players}
+                onClose={() => setShowGroupPlay(false)}
+                onStartGroupPlay={handleStartGroupPlay}
+                onAddNewPlayer={handleAddNewPlayerFromGroupPlay}
               />
         
               <CategoriesModal
