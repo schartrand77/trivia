@@ -1,4 +1,35 @@
 <?xml version="1.0"?>
+<Container version="2">
+  <Name>trivia</Name>
+  <Repository>ghcr.io/schartrand77/trivia:latest</Repository>
+  <Registry>https://github.com/schartrand77/trivia/pkgs/container/trivia</Registry>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/schartrand77/trivia/issues</Support>
+  <Project>https://github.com/schartrand77/trivia</Project>
+  <Overview><![CDATA[
+Stores Huddle Trivia — a lightweight React trivia SPA served by nginx.
+<br/><br/>
+Deploy this container and bind an `appdata` folder to `/data` so player records and game history persist across container restarts. The application serves a web UI on port 80 inside the container (map to any host port you prefer).
+]]></Overview>
+  <Category>Entertainment:Games:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/schartrand77/trivia/main/unraid-community-templates/trivia.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/schartrand77/trivia/main/public/banner.svg</Icon>
+
+  <!-- Port exposed by the container, mapped by Unraid UI -->
+  <Config Name="Web UI Port" Target="80" Default="8080" Mode="tcp" Description="Container web UI port (nginx)" Type="Port" Display="always" Required="true" Mask="false"/>
+
+  <!-- Persistent data path (host -> /data in container) -->
+  <Config Name="App Data" Target="/data" Default="/mnt/user/appdata/trivia" Description="Path on the Unraid host to store application data (player records)" Type="Path" Display="always" Required="true"/>
+
+  <!-- Common environment variables -->
+  <Config Name="Timezone" Target="TZ" Default="Etc/UTC" Description="Timezone" Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="PUID" Target="PUID" Default="99" Description="User id for file permissions" Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="PGID" Target="PGID" Default="100" Description="Group id for file permissions" Type="Variable" Display="always" Required="false" Mask="false"/>
+
+</Container>
+<?xml version="1.0"?>
 <Container templateVersion="1">
   <Name>trivia</Name>
   <DisplayName>Trivia (React)</DisplayName>

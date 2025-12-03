@@ -3,30 +3,38 @@ import { UserPlus, X, Edit, Trash, Save, XCircle } from 'lucide-react'; // Added
 
 const PlayersModal = ({ show, onClose, players, onAddPlayer, onUpdatePlayer, onDeletePlayer }) => {
   const [newPlayerName, setNewPlayerName] = useState('');
+  const [newPlayerAge, setNewPlayerAge] = useState('');
   const [editingPlayerId, setEditingPlayerId] = useState(null);
   const [editedPlayerName, setEditedPlayerName] = useState('');
+  const [editedPlayerAge, setEditedPlayerAge] = useState('');
 
   const handleAddPlayer = () => {
     if (newPlayerName.trim() === '') return;
-    onAddPlayer(newPlayerName.trim());
+    const age = newPlayerAge.trim() ? parseInt(newPlayerAge, 10) : null;
+    onAddPlayer(newPlayerName.trim(), age);
     setNewPlayerName('');
+    setNewPlayerAge('');
   };
 
   const handleEditClick = (player) => {
     setEditingPlayerId(player.id);
     setEditedPlayerName(player.name);
+    setEditedPlayerAge(player.age ? player.age.toString() : '');
   };
 
   const handleSaveEdit = (id) => {
     if (editedPlayerName.trim() === '') return;
-    onUpdatePlayer(id, editedPlayerName.trim());
+    const age = editedPlayerAge.trim() ? parseInt(editedPlayerAge, 10) : null;
+    onUpdatePlayer(id, editedPlayerName.trim(), age);
     setEditingPlayerId(null);
     setEditedPlayerName('');
+    setEditedPlayerAge('');
   };
 
   const handleCancelEdit = () => {
     setEditingPlayerId(null);
     setEditedPlayerName('');
+    setEditedPlayerAge('');
   };
 
   const handleDeleteClick = (id) => {
@@ -50,20 +58,32 @@ const PlayersModal = ({ show, onClose, players, onAddPlayer, onUpdatePlayer, onD
           <button onClick={onClose}><X className="w-5 h-5" /></button>
         </div>
         <div className="p-4">
-          <div className="flex gap-2 mb-4">
-            <input
-              type="text"
-              value={newPlayerName}
-              onChange={(e) => setNewPlayerName(e.target.value)}
-              placeholder="Enter new player name"
-              className="flex-grow p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-            />
-            <button
-              onClick={handleAddPlayer}
-              className="p-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-            >
-              Add Player
-            </button>
+          <div className="flex flex-col gap-2 mb-4">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newPlayerName}
+                onChange={(e) => setNewPlayerName(e.target.value)}
+                placeholder="Enter player name"
+                className="flex-grow p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+              />
+              <input
+                type="number"
+                value={newPlayerAge}
+                onChange={(e) => setNewPlayerAge(e.target.value)}
+                placeholder="Age"
+                min="1"
+                max="120"
+                className="w-16 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+              />
+              <button
+                onClick={handleAddPlayer}
+                className="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 whitespace-nowrap"
+              >
+                Add Player
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-gray-400">📌 Age field enables family mode - questions will be age-appropriate</p>
           </div>
           <div className="max-h-60 overflow-y-auto">
             <table className="w-full text-left text-sm">
@@ -71,7 +91,8 @@ const PlayersModal = ({ show, onClose, players, onAddPlayer, onUpdatePlayer, onD
                 <tr>
                   <th className="p-3">ID</th>
                   <th className="p-3">Name</th>
-                  <th className="p-3 text-right">Actions</th> {/* Added Actions column */}
+                  <th className="p-3">Age</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -88,6 +109,20 @@ const PlayersModal = ({ show, onClose, players, onAddPlayer, onUpdatePlayer, onD
                         />
                       ) : (
                         player.name
+                      )}
+                    </td>
+                    <td className="p-3 text-slate-800 dark:text-gray-100">
+                      {editingPlayerId === player.id ? (
+                        <input
+                          type="number"
+                          value={editedPlayerAge}
+                          onChange={(e) => setEditedPlayerAge(e.target.value)}
+                          min="1"
+                          max="120"
+                          className="w-14 p-1 border rounded text-slate-800 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                        />
+                      ) : (
+                        player.age ? `${player.age} yrs` : '—'
                       )}
                     </td>
                     <td className="p-3 text-right">
