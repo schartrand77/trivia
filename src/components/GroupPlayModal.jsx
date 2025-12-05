@@ -184,7 +184,7 @@ const GroupPlayModal = ({ show, players, onClose, onStartGroupPlay, onAddNewPlay
                   >
                     <span className="text-2xl w-8 text-center">#{index + 1}</span>
                     <span className="text-lg">{player.name}</span>
-                    {index === 0 && <span className="ml-auto text-xl">🏆 PLAYS FIRST</span>}
+                    {index === 0 && <span className="ml-auto text-xl">FIRST PLAYER</span>}
                   </div>
                 ))}
               </div>

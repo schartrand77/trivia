@@ -269,53 +269,87 @@ export default function App() {
   const startNewGame = useCallback(async (count, categoriesToUse, playerNameToSet = playerName) => {
     dispatch({ type: 'START_NEW_GAME' });
 
-              let finalCategoryIds = categoriesToUse;
-              if (!finalCategoryIds || finalCategoryIds.length === 0) {
-                // Fallback to selectedCategoryIds if provided, otherwise random
-                finalCategoryIds = selectedCategoryIds.length > 0 
-                  ? selectedCategoryIds 
-                  : [...CATEGORY_IDS].sort(() => 0.5 - Math.random()).slice(0, count);
-              }
-              
-              const newGameData = [];
-    
-              try {
-                for (let i = 0; i < finalCategoryIds.length; i++) {
-                  const catId = finalCategoryIds[i];
-                  dispatch({ type: 'SET_LOADING_MESSAGE', payload: `Fetching Category ${i + 1} of ${finalCategoryIds.length}...` });
-    
-                  if (i > 0) await wait(5000); 
-    
-                  try {
-                    let url = `https://opentdb.com/api.php?amount=5&category=${catId}&type=multiple`;
-                    if (selectedDifficulty !== "any") {
-                      url += `&difficulty=${selectedDifficulty}`;
-                    }
-                    const res = await fetch(url);
-                    const data = await res.json();
-          if (!data.results || data.results.length === 0) {
-            console.warn(`Category ${catId} failed or has no data. Skipping.`);
-            continue;
-          }
+    let requestedCategoryIds;
+    if (categoriesToUse && categoriesToUse.length > 0) {
+      requestedCategoryIds = [...categoriesToUse];
+    } else if (selectedCategoryIds.length > 0) {
+      requestedCategoryIds = [...selectedCategoryIds];
+    } else {
+      requestedCategoryIds = [...CATEGORY_IDS].sort(() => 0.5 - Math.random()).slice(0, count);
+    }
 
-          const difficultyMap = { easy: 1, medium: 2, hard: 3 };
-          const sortedQuestions = data.results.sort((a, b) => difficultyMap[a.difficulty] - difficultyMap[b.difficulty]);
+    requestedCategoryIds = requestedCategoryIds.slice(0, count);
+    const targetCategoryTotal = requestedCategoryIds.length;
 
-          newGameData.push({
-            category: decodeHTML(data.results[0].category).replace("Entertainment: ", "").replace("Science: ", ""),
-            clues: sortedQuestions.map((q, index) => ({
-              id: `${catId}-${index}-${Math.random().toString(36).substr(2, 9)}`,
-              level: index + 1,
-              value: (index + 1) * 10,
-              question: decodeHTML(q.question),
-              answer: decodeHTML(q.correct_answer),
-              options: [...q.incorrect_answers, q.correct_answer]
-                .map(decodeHTML)
-                .sort(() => Math.random() - 0.5)
-            }))
-          });
-        } catch (innerError) {
-          console.warn(`Failed to fetch category ${catId}`, innerError);
+    if (targetCategoryTotal === 0) {
+      dispatch({ type: 'FETCH_FAILED', payload: "No categories selected. Please choose at least one category." });
+      return;
+    }
+
+    const allowReplacementCategories = selectedCategoryIds.length === 0 && (!categoriesToUse || categoriesToUse.length === 0);
+    const newGameData = [];
+    const attemptedCategoryIds = new Set(requestedCategoryIds);
+    let fetchCount = 0;
+
+    const fetchCategoryData = async (catId) => {
+      const progressIndex = Math.min(newGameData.length + 1, targetCategoryTotal);
+      dispatch({ type: 'SET_LOADING_MESSAGE', payload: `Fetching Category ${progressIndex} of ${targetCategoryTotal}...` });
+
+      if (fetchCount > 0) await wait(5000);
+      fetchCount++;
+
+      try {
+        let url = `https://opentdb.com/api.php?amount=5&category=${catId}&type=multiple`;
+        if (selectedDifficulty !== "any") {
+          url += `&difficulty=${selectedDifficulty}`;
+        }
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!data.results || data.results.length === 0) {
+          console.warn(`Category ${catId} failed or has no data. Skipping.`);
+          return null;
+        }
+
+        const difficultyMap = { easy: 1, medium: 2, hard: 3 };
+        const sortedQuestions = data.results.sort((a, b) => difficultyMap[a.difficulty] - difficultyMap[b.difficulty]);
+
+        return {
+          category: decodeHTML(data.results[0].category).replace("Entertainment: ", "").replace("Science: ", ""),
+          clues: sortedQuestions.map((q, index) => ({
+            id: `${catId}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+            level: index + 1,
+            value: (index + 1) * 10,
+            question: decodeHTML(q.question),
+            answer: decodeHTML(q.correct_answer),
+            options: [...q.incorrect_answers, q.correct_answer]
+              .map(decodeHTML)
+              .sort(() => Math.random() - 0.5)
+          }))
+        };
+      } catch (innerError) {
+        console.warn(`Failed to fetch category ${catId}`, innerError);
+        return null;
+      }
+    };
+
+    const fetchAndStoreCategory = async (catId) => {
+      const categoryData = await fetchCategoryData(catId);
+      if (categoryData) {
+        newGameData.push(categoryData);
+      }
+    };
+
+    try {
+      for (const catId of requestedCategoryIds) {
+        await fetchAndStoreCategory(catId);
+      }
+
+      if (allowReplacementCategories && newGameData.length < targetCategoryTotal) {
+        const backupIds = CATEGORY_IDS.filter(id => !attemptedCategoryIds.has(id));
+        for (const backupId of backupIds) {
+          if (newGameData.length >= targetCategoryTotal) break;
+          attemptedCategoryIds.add(backupId);
+          await fetchAndStoreCategory(backupId);
         }
       }
 
@@ -324,12 +358,17 @@ export default function App() {
         return;
       }
 
+      if (newGameData.length < targetCategoryTotal) {
+        dispatch({ type: 'FETCH_FAILED', payload: "Unable to load enough categories. Please try again shortly." });
+        return;
+      }
+
       dispatch({ type: 'FETCH_SUCCESS', payload: newGameData });
     } catch (error) {
       console.error("Critical error fetching questions:", error);
       dispatch({ type: 'FETCH_FAILED', payload: "Error connecting to Trivia API." });
-    } // Missing closing brace for try-catch
-  }, [selectedCategoryIds, selectedDifficulty, dispatch]);
+    }
+  }, [selectedCategoryIds, selectedDifficulty, dispatch, playerName]);
 
   const loadGameHistory = useCallback(() => {
     const history = getGameHistory();
@@ -522,11 +561,15 @@ export default function App() {
     console.log('====================');
     
     dispatch({ type: 'ANSWER_QUESTION', payload: { isCorrect, clue: gameState.currentClue } });
-
-    setTimeout(() => {
-      dispatch({ type: 'CLOSE_QUESTION' });
-    }, 1500);
   }, [gameState.currentClue]);
+
+  const handlePauseGame = useCallback(() => {
+    dispatch({ type: 'PAUSE_GAME' });
+  }, [dispatch]);
+
+  const handleResumeGame = useCallback(() => {
+    dispatch({ type: 'RESUME_GAME' });
+  }, [dispatch]);
 
   // Timer logic
   useEffect(() => {
@@ -539,9 +582,6 @@ export default function App() {
       // Timer expired (user didn't answer in time)
       console.log('Timer expired - dispatching TIMER_EXPIRED');
       dispatch({ type: 'TIMER_EXPIRED' });
-      setTimeout(() => {
-        dispatch({ type: 'CLOSE_QUESTION' });
-      }, 1500); // Close after showing feedback
     }
 
     return () => clearInterval(timerInterval);
@@ -586,6 +626,9 @@ export default function App() {
           setShowPlayers={setShowPlayers}
           setShowPlayerSelector={setShowPlayerSelector}
           setShowGroupPlay={setShowGroupPlay}
+          setShowCategoriesModal={setShowCategoriesModal}
+          setShowHowToPlayModal={setShowHowToPlayModal}
+          setShowAboutModal={setShowAboutModal}
           saveRecord={saveRecord}
           startNewGame={() => {
             if (gameState.correctAnswers > 0 || gameState.wrongAnswers > 0) {
@@ -605,6 +648,9 @@ export default function App() {
           difficulty={selectedDifficulty}
           setDifficulty={setSelectedDifficulty}
           currentScore={gameState.score} // Pass current score for confirmation logic
+          isPaused={gameState.isPaused}
+          onPauseGame={handlePauseGame}
+          onResumeGame={handleResumeGame}
         />
 
         <main className="flex-grow p-4 md:p-8 overflow-auto flex justify-center items-start">

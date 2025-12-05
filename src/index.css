@@ -37,3 +37,37 @@ body { @apply bg-gradient-to-br from-slate-50 to-slate-200 text-slate-800 dark:f
   animation: fade-out 0.2s ease-out forwards;
 }
 
+@keyframes confetti-explosion {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2) rotate(var(--rotate-start, 0deg));
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--tx, 0)), calc(-50% + var(--ty, 0))) scale(1.1) rotate(calc(var(--rotate-start, 0deg) + 720deg));
+  }
+}
+
+.confetti-explosion {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 60;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 2px;
+  opacity: 0;
+  animation-name: confetti-explosion;
+  animation-iteration-count: infinite;
+  animation-fill-mode: forwards;
+}
+
+

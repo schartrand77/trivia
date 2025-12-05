@@ -1,55 +1,27 @@
 <?xml version="1.0"?>
-<Container templateVersion="1">
-  <Name>trivia</Name>
-  <DisplayName>Trivia (React)</DisplayName>
-  <Repository>schartrand77/trivia:latest</Repository>
-  <Registry>dockerhub</Registry>
-  <Overview>Trivia React SPA served by nginx. Build and push the Docker image then deploy on Unraid.</Overview>
-  <Author>Stephen Chartrand</Author>
-  <Website>https://github.com/schartrand77/trivia</Website>
-  <Support>https://github.com/schartrand77/trivia/issues</Support>
+<Container version="2">
+  <Name>Trivia</Name>
+  <Repository>__DOCKER_REPO__</Repository>
+  <Registry>https://github.com/schartrand77/trivia</Registry>
   <Network>bridge</Network>
-
-  <Ports>
-    <Port>
-      <ContainerPort>80</ContainerPort>
-      <HostPort>8080</HostPort>
-      <Protocol>tcp</Protocol>
-      <Description>Web UI</Description>
-    </Port>
-  </Ports>
-
-  <Config>
-    <Environment>
-      <Variable>
-        <Name>TZ</Name>
-        <Default>Etc/UTC</Default>
-        <Description>Timezone</Description>
-      </Variable>
-      <Variable>
-        <Name>PUID</Name>
-        <Default>99</Default>
-        <Description>UID for file permissions (optional)</Description>
-      </Variable>
-      <Variable>
-        <Name>PGID</Name>
-        <Default>100</Default>
-        <Description>GID for file permissions (optional)</Description>
-      </Variable>
-    </Environment>
-  </Config>
-
-  <Volumes>
-    <Volume>
-      <Container>/usr/share/nginx/html</Container>
-      <Host></Host>
-      <Description>Optional: bind-mount a directory to serve custom static files</Description>
-    </Volume>
-  </Volumes>
-
-  <PostInst>
-    <Line>This template is pre-configured to use the image <b>schartrand77/trivia:latest</b> from Docker Hub.</Line>
-    <Line>If you want to use a different image, edit the <b>&lt;Repository&gt;</b> field (for example <i>yourname/trivia:latest</i>).</Line>
-    <Line>Set `HostPort` as desired and configure any environment variables.</Line>
-  </PostInst>
+  <MyIP/>
+  <Shell>/bin/sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/schartrand77/trivia/issues</Support>
+  <Project>https://github.com/schartrand77/trivia</Project>
+  <Overview><![CDATA[
+Trivia is a Vite + React single-page application served through nginx. The image bundles the compiled frontend and exposes it on port 80 inside the container. Map a host port (default 8080) to reach the web UI and optionally set the TZ environment variable to control container time.
+  ]]></Overview>
+  <Category>Game:Trivia</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <Icon>https://raw.githubusercontent.com/schartrand77/trivia/main/public/banner.png</Icon>
+  <ExtraParams></ExtraParams>
+  <PostArgs></PostArgs>
+  <CPUset></CPUset>
+  <DateInstalled></DateInstalled>
+  <DonateText></DonateText>
+  <DonateLink></DonateLink>
+  <Requires></Requires>
+  <Config Name="HTTP Port" Target="80" Default="8080" Mode="tcp" Description="Port for the Trivia web UI" Type="Port" Display="always" Required="true" Mask="false"></Config>
+  <Config Name="Timezone" Target="TZ" Default="Etc/UTC" Mode="" Description="Container timezone (optional)" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
 </Container>

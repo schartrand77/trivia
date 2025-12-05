@@ -48,8 +48,8 @@ const RecordsModal = ({ showRecords, setShowRecords, records }) => {
                   <tr>
                     <th className="p-3">Date</th>
                     <th className="p-3">Player</th>
-                    <th className="p-3 text-right">✓ Correct</th>
-                    <th className="p-3 text-right">✗ Wrong</th>
+                    <th className="p-3 text-right">Correct</th>
+                    <th className="p-3 text-right">Wrong</th>
                   </tr>
                 </thead>
                 <tbody>
