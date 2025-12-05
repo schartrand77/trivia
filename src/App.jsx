@@ -14,6 +14,7 @@ import { initDB, getPlayers, addPlayer, saveGame, getGameHistory, updatePlayer a
 
 // --- CONSTANTS ---
 import { CATEGORY_IDS } from './utils/categories';
+import { getDifficultyForAge, getAgeGroupLabel, filterCategoriesForAge, isFamilyModePlayer } from './utils/familyMode';
 
 // --- HELPER: HTML DECODER ---
 const decodeHTML = (html) => {
@@ -56,7 +57,7 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  */
 
 /**
- * @typedef {'START_NEW_GAME'|'FETCH_SUCCESS'|'FETCH_FAILED'|'SET_LOADING_MESSAGE'|'SET_CURRENT_CLUE'|'ANSWER_QUESTION'|'CLOSE_QUESTION'|'DECREMENT_TIMER'|'TIMER_EXPIRED'|'PAUSE_GAME'|'RESUME_GAME'} ActionType // Added timer and pause related actions
+ * @typedef {'START_NEW_GAME'|'FETCH_SUCCESS'|'FETCH_FAILED'|'SET_LOADING_MESSAGE'|'SET_CURRENT_CLUE'|'ANSWER_QUESTION'|'SKIP_QUESTION'|'CLOSE_QUESTION'|'DECREMENT_TIMER'|'TIMER_EXPIRED'|'PAUSE_GAME'|'RESUME_GAME'} ActionType // Added timer and pause related actions
  */
 
 /**
@@ -143,6 +144,18 @@ function gameReducer(state, action) {
             feedback: isCorrect ? 'correct' : 'incorrect',
             timer: 0, // Stop timer after answer
         };
+    case 'SKIP_QUESTION':
+        // Skip without penalty - just mark as answered, no score change
+        const skippedClue = action.payload;
+        const skippedAnsweredIds = new Set(state.answeredIds).add(skippedClue.id);
+        console.log('SKIP_QUESTION: Question skipped without penalty');
+        return {
+            ...state,
+            answeredIds: skippedAnsweredIds,
+            feedback: null,
+            timer: 0,
+            currentClue: null,
+        };
     case 'CLOSE_QUESTION':
         return {
             ...state,
@@ -190,6 +203,10 @@ export default function App() {
   const [playerName, setPlayerName] = useState(() => {
     const savedPlayerName = localStorage.getItem('trivia_playerName');
     return savedPlayerName ? savedPlayerName : "Player 1";
+  });
+  const [playerAge, setPlayerAge] = useState(() => {
+    const savedPlayerAge = localStorage.getItem('trivia_playerAge');
+    return savedPlayerAge ? parseInt(savedPlayerAge, 10) : null;
   });
   const [showRecords, setShowRecords] = useState(false);
   const [records, setRecords] = useState([]);
@@ -246,6 +263,15 @@ export default function App() {
     localStorage.setItem('trivia_playerName', playerName);
   }, [playerName]);
 
+  // Save playerAge to localStorage
+  useEffect(() => {
+    if (playerAge !== null) {
+      localStorage.setItem('trivia_playerAge', playerAge.toString());
+    } else {
+      localStorage.removeItem('trivia_playerAge');
+    }
+  }, [playerAge]);
+
   // Save selectedCategoryIds to localStorage
   useEffect(() => {
     localStorage.setItem('trivia_selectedCategoryIds', JSON.stringify(selectedCategoryIds));
@@ -265,17 +291,38 @@ export default function App() {
    * @param {number} count - The number of categories to fetch if no specific categories are provided.
    * @param {number[]} [categoriesToUse] - Optional array of specific category IDs to use.
    * @param {string} [playerNameToSet] - The player name starting the game (defaults to current playerName).
+   * @param {number} [playerAgeToSet] - Optional player age for family mode (defaults to current playerAge).
    */
-  const startNewGame = useCallback(async (count, categoriesToUse, playerNameToSet = playerName) => {
+  const startNewGame = useCallback(async (count, categoriesToUse, playerNameToSet = playerName, playerAgeToSet = playerAge) => {
     dispatch({ type: 'START_NEW_GAME' });
 
-    let requestedCategoryIds;
-    if (categoriesToUse && categoriesToUse.length > 0) {
-      requestedCategoryIds = [...categoriesToUse];
-    } else if (selectedCategoryIds.length > 0) {
-      requestedCategoryIds = [...selectedCategoryIds];
-    } else {
-      requestedCategoryIds = [...CATEGORY_IDS].sort(() => 0.5 - Math.random()).slice(0, count);
+    if (playerNameToSet) {
+      setPlayerName(playerNameToSet);
+    }
+    if (typeof playerAgeToSet === 'number') {
+      setPlayerAge(playerAgeToSet);
+    }
+
+    const usingCustomCategories = Array.isArray(categoriesToUse) && categoriesToUse.length > 0;
+    const usingSavedCategories = !usingCustomCategories && selectedCategoryIds.length > 0;
+    const allowReplacementCategories = !usingCustomCategories && !usingSavedCategories;
+
+    let requestedCategoryIds = usingCustomCategories
+      ? [...categoriesToUse]
+      : usingSavedCategories
+        ? [...selectedCategoryIds]
+        : [...CATEGORY_IDS].sort(() => 0.5 - Math.random()).slice(0, count);
+
+    requestedCategoryIds = requestedCategoryIds.slice(0, count);
+
+    if (playerAgeToSet && playerAgeToSet > 0) {
+      requestedCategoryIds = filterCategoriesForAge(requestedCategoryIds, playerAgeToSet);
+      if (allowReplacementCategories && requestedCategoryIds.length < count) {
+        const friendlyPool = filterCategoriesForAge(CATEGORY_IDS, playerAgeToSet);
+        const neededExtras = count - requestedCategoryIds.length;
+        const extras = friendlyPool.filter(id => !requestedCategoryIds.includes(id)).slice(0, neededExtras);
+        requestedCategoryIds = requestedCategoryIds.concat(extras);
+      }
     }
 
     requestedCategoryIds = requestedCategoryIds.slice(0, count);
@@ -286,13 +333,16 @@ export default function App() {
       return;
     }
 
-    const allowReplacementCategories = selectedCategoryIds.length === 0 && (!categoriesToUse || categoriesToUse.length === 0);
+    const difficultyToUse = (playerAgeToSet && playerAgeToSet > 0)
+      ? getDifficultyForAge(playerAgeToSet)
+      : selectedDifficulty;
+
     const newGameData = [];
     const attemptedCategoryIds = new Set(requestedCategoryIds);
     let fetchCount = 0;
 
-    const fetchCategoryData = async (catId) => {
-      const progressIndex = Math.min(newGameData.length + 1, targetCategoryTotal);
+    const fetchCategoryData = async (catId, indexForMessage) => {
+      const progressIndex = Math.min(indexForMessage, targetCategoryTotal);
       dispatch({ type: 'SET_LOADING_MESSAGE', payload: `Fetching Category ${progressIndex} of ${targetCategoryTotal}...` });
 
       if (fetchCount > 0) await wait(5000);
@@ -300,8 +350,8 @@ export default function App() {
 
       try {
         let url = `https://opentdb.com/api.php?amount=5&category=${catId}&type=multiple`;
-        if (selectedDifficulty !== "any") {
-          url += `&difficulty=${selectedDifficulty}`;
+        if (difficultyToUse !== "any") {
+          url += `&difficulty=${difficultyToUse}`;
         }
         const res = await fetch(url);
         const data = await res.json();
@@ -332,24 +382,27 @@ export default function App() {
       }
     };
 
-    const fetchAndStoreCategory = async (catId) => {
-      const categoryData = await fetchCategoryData(catId);
+    const fetchAndStoreCategory = async (catId, indexForMessage) => {
+      const categoryData = await fetchCategoryData(catId, indexForMessage);
       if (categoryData) {
         newGameData.push(categoryData);
       }
     };
 
     try {
-      for (const catId of requestedCategoryIds) {
-        await fetchAndStoreCategory(catId);
+      for (let i = 0; i < requestedCategoryIds.length; i++) {
+        await fetchAndStoreCategory(requestedCategoryIds[i], i + 1);
       }
 
-      if (allowReplacementCategories && newGameData.length < targetCategoryTotal) {
-        const backupIds = CATEGORY_IDS.filter(id => !attemptedCategoryIds.has(id));
+      if (allowReplacementCategories && newGameData.length < count) {
+        const backupPool = playerAgeToSet && playerAgeToSet > 0
+          ? filterCategoriesForAge(CATEGORY_IDS, playerAgeToSet)
+          : CATEGORY_IDS;
+        const backupIds = backupPool.filter(id => !attemptedCategoryIds.has(id));
         for (const backupId of backupIds) {
-          if (newGameData.length >= targetCategoryTotal) break;
+          if (newGameData.length >= count) break;
           attemptedCategoryIds.add(backupId);
-          await fetchAndStoreCategory(backupId);
+          await fetchAndStoreCategory(backupId, newGameData.length + 1);
         }
       }
 
@@ -358,17 +411,17 @@ export default function App() {
         return;
       }
 
-      if (newGameData.length < targetCategoryTotal) {
+      if (newGameData.length < Math.min(count, targetCategoryTotal)) {
         dispatch({ type: 'FETCH_FAILED', payload: "Unable to load enough categories. Please try again shortly." });
         return;
       }
 
-      dispatch({ type: 'FETCH_SUCCESS', payload: newGameData });
+      dispatch({ type: 'FETCH_SUCCESS', payload: newGameData.slice(0, count) });
     } catch (error) {
       console.error("Critical error fetching questions:", error);
       dispatch({ type: 'FETCH_FAILED', payload: "Error connecting to Trivia API." });
     }
-  }, [selectedCategoryIds, selectedDifficulty, dispatch, playerName]);
+  }, [selectedCategoryIds, selectedDifficulty, dispatch, playerName, playerAge, setPlayerName, setPlayerAge]);
 
   const loadGameHistory = useCallback(() => {
     const history = getGameHistory();
@@ -380,22 +433,17 @@ export default function App() {
       await initDB();
       const players = getPlayers();
       setPlayers(players);
-      let firstPlayerName = "Player 1";
-      if (players.length > 0) {
-        firstPlayerName = players[0].name;
-        setPlayerName(firstPlayerName);
-      }
       loadGameHistory();
-      // Show player selector modal on app load if there are players
+
       if (players.length > 0) {
-        setShowPlayerSelector(true);
+        setShowGroupPlay(true);
       } else {
-        // If no players, start game with default player
-        startNewGame(5, selectedCategoryIds, firstPlayerName);
+        // If no players, start game with a default player
+        startNewGame(5, selectedCategoryIds, "Player 1", null);
       }
     };
     initialize();
-  }, [loadGameHistory, startNewGame, selectedCategoryIds]);
+  }, [loadGameHistory, selectedCategoryIds]);
 
   const saveRecord = useCallback(() => {
     if (gameState.correctAnswers === 0 && gameState.wrongAnswers === 0) return;
@@ -409,10 +457,11 @@ export default function App() {
 
   /**
    * @param {string} name - The name of the new player.
+   * @param {number} [age] - Optional age of the player for family mode.
    * @returns {boolean} True if the player was added successfully, false otherwise.
    */
-  const addNewPlayer = useCallback((name) => {
-    const result = addPlayer(name);
+  const addNewPlayer = useCallback((name, age = null) => {
+    const result = addPlayer(name, age);
     if (result.success) {
       const newPlayers = getPlayers();
       setPlayers(newPlayers);
@@ -423,35 +472,39 @@ export default function App() {
   }, []);
 
   const handleSelectPlayer = useCallback((playerName) => {
+    const player = players.find(p => p.name === playerName);
     setPlayerName(playerName);
+    setPlayerAge(player?.age || null);
     setShowPlayerSelector(false);
-    startNewGame(categoryCount, selectedCategoryIds, playerName);
-  }, [categoryCount, selectedCategoryIds, startNewGame]);
+    startNewGame(categoryCount, selectedCategoryIds, playerName, player?.age || null);
+  }, [categoryCount, selectedCategoryIds, players]);
 
-  const handleAddNewPlayerFromSelector = useCallback((name) => {
-    if (addNewPlayer(name)) {
-      // After adding player, automatically select them and start the game
+  const handleAddNewPlayerFromSelector = useCallback((name, age = null) => {
+    if (addNewPlayer(name, age)) {
+      // After adding player, automatically select them but don't start the game
       setPlayerName(name);
+      setPlayerAge(age || null);
       setShowPlayerSelector(false);
-      startNewGame(categoryCount, selectedCategoryIds, name);
     }
-  }, [categoryCount, selectedCategoryIds, startNewGame]);
+  }, [addNewPlayer]);
 
-  const handleAddNewPlayerFromGroupPlay = useCallback((name) => {
-    if (addNewPlayer(name)) {
+  const handleAddNewPlayerFromGroupPlay = useCallback((name, age = null) => {
+    if (addNewPlayer(name, age)) {
       // After adding player, the GroupPlayModal will refresh its player list
       const updatedPlayers = getPlayers();
       setPlayers(updatedPlayers);
     }
-  }, []);
+  }, [addNewPlayer]);
 
   const handleStartGroupPlay = useCallback((playOrder) => {
     setPlayQueue(playOrder);
     setCurrentQueueIndex(0);
     setShowGroupPlay(false);
     // Start the game with the first player in the queue
-    setPlayerName(playOrder[0].name);
-    startNewGame(categoryCount, selectedCategoryIds, playOrder[0].name);
+    const firstPlayer = playOrder[0];
+    setPlayerName(firstPlayer.name);
+    setPlayerAge(firstPlayer.age || null);
+    startNewGame(categoryCount, selectedCategoryIds, firstPlayer.name, firstPlayer.age || null);
   }, [categoryCount, selectedCategoryIds, startNewGame]);
 
   const handleNextPlayerInQueue = useCallback(() => {
@@ -461,7 +514,8 @@ export default function App() {
       setCurrentQueueIndex(nextIndex);
       const nextPlayer = playQueue[nextIndex];
       setPlayerName(nextPlayer.name);
-      startNewGame(categoryCount, selectedCategoryIds, nextPlayer.name);
+      setPlayerAge(nextPlayer.age || null);
+      startNewGame(categoryCount, selectedCategoryIds, nextPlayer.name, nextPlayer.age || null);
     } else {
       // All players have played, reset the queue
       setPlayQueue([]);
@@ -474,16 +528,18 @@ export default function App() {
     if (players.length > 0) {
       const randomPlayer = players[Math.floor(Math.random() * players.length)];
       setPlayerName(randomPlayer.name);
+      setPlayerAge(randomPlayer.age || null);
     }
   }, [players]);
 
   /**
    * @param {number} id - The ID of the player to update.
    * @param {string} newName - The new name for the player.
+   * @param {number} [newAge] - Optional new age for the player.
    * @returns {boolean} True if the player was updated successfully, false otherwise.
    */
-  const onUpdatePlayer = useCallback((id, newName) => {
-    const result = updatePlayerDB(id, newName);
+  const onUpdatePlayer = useCallback((id, newName, newAge = null) => {
+    const result = updatePlayerDB(id, newName, newAge);
     if (result.success) {
       const newPlayers = getPlayers();
       setPlayers(newPlayers);
@@ -571,21 +627,33 @@ export default function App() {
     dispatch({ type: 'RESUME_GAME' });
   }, [dispatch]);
 
+  /**
+   * Skip question handler for child players (no penalty)
+   */
+  const handleSkipQuestion = useCallback(() => {
+    if (!gameState.currentClue) return;
+    
+    // Mark as answered without any score change (no penalty, no reward)
+    dispatch({ type: 'SKIP_QUESTION', payload: gameState.currentClue });
+  }, [gameState.currentClue, dispatch]);
+
   // Timer logic
   useEffect(() => {
     let timerInterval;
-    if (gameState.currentClue && gameState.timer > 0 && !gameState.isPaused) { // Only decrement if not paused
+
+    // Timer only runs for non-child players
+    if (!isFamilyModePlayer(playerAge) && gameState.currentClue && gameState.timer > 0 && !gameState.isPaused) {
       timerInterval = setInterval(() => {
         dispatch({ type: 'DECREMENT_TIMER' });
       }, 1000);
-    } else if (gameState.timer === 0 && gameState.currentClue && !gameState.isPaused && !gameState.feedback) { // Only expire if not paused AND no feedback yet
+    } else if (!isFamilyModePlayer(playerAge) && gameState.timer === 0 && gameState.currentClue && !gameState.isPaused && !gameState.feedback) {
       // Timer expired (user didn't answer in time)
       console.log('Timer expired - dispatching TIMER_EXPIRED');
       dispatch({ type: 'TIMER_EXPIRED' });
     }
 
     return () => clearInterval(timerInterval);
-  }, [gameState.currentClue, gameState.timer, dispatch, gameState.isPaused, gameState.feedback]);
+  }, [gameState.currentClue, gameState.timer, dispatch, gameState.isPaused, gameState.feedback, playerAge]);
 
   useEffect(() => {
       if(gameState.gameData.length === 0) return;
@@ -608,7 +676,7 @@ export default function App() {
     if (playQueue.length > 0) {
       handleNextPlayerInQueue();
     } else {
-      startNewGame(categoryCount, undefined, playerName);
+      startNewGame(categoryCount, undefined, playerName, playerAge);
     }
   }, [gameState.correctAnswers, gameState.wrongAnswers, categoryCount, playerName, saveRecord, startNewGame, playQueue, handleNextPlayerInQueue]);
 
@@ -639,7 +707,7 @@ export default function App() {
                 return;
               }
             }
-            startNewGame(categoryCount, undefined, playerName);
+            startNewGame(categoryCount, undefined, playerName, playerAge);
           }}
           onEndGame={handleEndGame}
           categoryCount={categoryCount}
@@ -672,6 +740,8 @@ export default function App() {
                 timer={gameState.timer} // Pass timer value
                 isPaused={gameState.isPaused} // Pass isPaused value
                 onClose={() => dispatch({ type: 'CLOSE_QUESTION' })}
+                onSkip={handleSkipQuestion}
+                isChildPlayer={isFamilyModePlayer(playerAge)}
               />
         <RecordsModal
           showRecords={showRecords}

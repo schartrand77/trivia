@@ -1,27 +1,29 @@
-version: '3.8'
-
 services:
   trivia:
     build:
       context: .
       dockerfile: Dockerfile
-    image: trivia:latest
-    container_name: trivia
-    hostname: trivia
+    image: ${IMAGE_NAME}:${IMAGE_TAG}
+    container_name: ${CONTAINER_NAME}
+    hostname: ${CONTAINER_HOSTNAME}
     ports:
-      - "8080:80"
+      - "${PORT_HOST}:${PORT_CONTAINER}"
     environment:
-      TZ: Etc/UTC
-    restart: unless-stopped
+      TZ: ${TZ}
+    volumes:
+      - ${DATA_VOLUME}:/data  # Mount local data directory for persistent player records
+    restart: ${RESTART_POLICY}
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      interval: ${HEALTHCHECK_INTERVAL}s
+      timeout: ${HEALTHCHECK_TIMEOUT}s
+      retries: ${HEALTHCHECK_RETRIES}
+      start_period: ${HEALTHCHECK_START_PERIOD}s
     networks:
       - trivia-net
 
 networks:
   trivia-net:
-    driver: bridge
+    driver: ${NETWORK_DRIVER}
+
+

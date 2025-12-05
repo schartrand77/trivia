@@ -51,14 +51,14 @@ const Header = ({
               {players.length > 0 ? (
                 players.map((player) => (
                   <option key={player.id} value={player.name} className="bg-indigo-700">
-                    {player.name}
+                    {player.name}{player.age ? ` (${player.age}y)` : ''}
                   </option>
                 ))
               ) : (
                 <option value="Player 1" className="bg-indigo-700">Player 1</option>
               )}
             </select>
-            <button onClick={() => setShowPlayerSelector(true)} title="Switch Player" className="p-1">
+            <button onClick={() => setShowPlayerSelector(true)} title="Switch Player / Add Age" className="p-1">
               <User className="w-3 h-3 text-yellow-400 hover:text-yellow-300 transition-colors" />
             </button>
             <button onClick={randomizePlayer} title="Random Player" className="p-1">

@@ -4,6 +4,7 @@ import { Users, Plus, X, Shuffle, Play } from 'lucide-react';
 const GroupPlayModal = ({ show, players, onClose, onStartGroupPlay, onAddNewPlayer }) => {
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [newPlayerName, setNewPlayerName] = useState('');
+  const [newPlayerAge, setNewPlayerAge] = useState('');
   const [isAddingPlayer, setIsAddingPlayer] = useState(false);
   const [playOrder, setPlayOrder] = useState([]);
   const [orderShuffled, setOrderShuffled] = useState(false);
@@ -28,8 +29,10 @@ const GroupPlayModal = ({ show, players, onClose, onStartGroupPlay, onAddNewPlay
 
   const handleAddPlayer = () => {
     if (newPlayerName.trim() === '') return;
-    onAddNewPlayer(newPlayerName.trim());
+    const age = newPlayerAge.trim() ? parseInt(newPlayerAge, 10) : null;
+    onAddNewPlayer(newPlayerName.trim(), age);
     setNewPlayerName('');
+    setNewPlayerAge('');
     setIsAddingPlayer(false);
   };
 
@@ -78,17 +81,31 @@ const GroupPlayModal = ({ show, players, onClose, onStartGroupPlay, onAddNewPlay
                 <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
                   Enter new player name:
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newPlayerName}
-                    onChange={(e) => setNewPlayerName(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Player name"
-                    autoFocus
-                    className="flex-grow px-3 py-2 border-2 border-indigo-300 dark:border-indigo-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-100"
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={newPlayerName}
+                  onChange={(e) => setNewPlayerName(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Player name"
+                  autoFocus
+                  className="w-full px-3 py-2 border-2 border-indigo-300 dark:border-indigo-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-100"
+                />
+                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
+                  Age (optional - enables family mode):
+                </label>
+                <input
+                  type="number"
+                  value={newPlayerAge}
+                  onChange={(e) => setNewPlayerAge(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Age"
+                  min="1"
+                  max="120"
+                  className="w-full px-3 py-2 border-2 border-indigo-300 dark:border-indigo-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-100"
+                />
+                <p className="text-xs text-slate-500 dark:text-gray-400">
+                  📌 Setting an age will automatically adjust question difficulty to be age-appropriate
+                </p>
                 <div className="flex gap-2">
                   <button
                     onClick={handleAddPlayer}

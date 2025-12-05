@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, X, SkipForward } from 'lucide-react';
 
 const Confetti = ({ isActive }) => {
-  const pieces = useMemo(() => (
-    Array.from({ length: 120 }, (_, i) => ({
+  const pieces = useMemo(() => {
+    if (!isActive) return [];
+    return Array.from({ length: 120 }, (_, i) => ({
       id: i,
       tx: (Math.random() * 160 - 80).toFixed(1),
       ty: (Math.random() * 120 - 60).toFixed(1),
@@ -12,8 +13,8 @@ const Confetti = ({ isActive }) => {
       size: 4 + Math.random() * 6,
       color: ['#fcd34d', '#f472b6', '#60a5fa', '#34d399', '#c084fc'][Math.floor(Math.random() * 5)],
       rotation: Math.floor(Math.random() * 360),
-    }))
-  ), []);
+    }));
+  }, [isActive]);
 
   if (!isActive) return null;
 
@@ -63,7 +64,7 @@ const WrongAnswerShake = ({ isActive }) => {
   );
 };
 
-const QuestionModal = ({ currentClue, handleAnswer, feedback, onClose, timer, isPaused }) => { // Added timer prop, isPaused
+const QuestionModal = ({ currentClue, handleAnswer, feedback, onClose, timer, isPaused, onSkip, isChildPlayer }) => {
   const [isClosing, setIsClosing] = useState(false);
 
   const handleClose = () => {
@@ -97,9 +98,11 @@ const QuestionModal = ({ currentClue, handleAnswer, feedback, onClose, timer, is
                 {isPaused ? (
                   <span className="font-black text-2xl text-yellow-400">Paused</span>
                 ) : (
-                  <span className={`font-black text-2xl tabular-nums ${timer <= 5 ? 'text-red-400 animate-pulse' : feedback === 'correct' ? 'text-white' : 'text-white'}`}>
-                    {timer}s
-                  </span>
+                  !isChildPlayer && (
+                    <span className={`font-black text-2xl tabular-nums ${timer <= 5 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
+                      {timer}s
+                    </span>
+                  )
                 )}
                 <button onClick={handleClose} className={`${feedback === 'correct' ? 'hover:bg-green-500' : feedback === 'incorrect' ? 'hover:bg-red-500' : 'hover:bg-indigo-600'} text-white p-1 rounded-full transition-colors`}>
                   <X className="w-6 h-6" />
@@ -137,22 +140,44 @@ const QuestionModal = ({ currentClue, handleAnswer, feedback, onClose, timer, is
                       </div>
                     </>
                   )}
+                  <button
+                    onClick={handleClose}
+                    className="mt-8 px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                  >
+                    Continue
+                  </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {currentClue.options.map((option, idx) => (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {currentClue.options.map((option, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleAnswer(option)}
+                        disabled={isPaused}
+                        className={`
+                          p-4 rounded-xl border-2 border-slate-100 dark:border-gray-700 bg-slate-50 dark:bg-gray-700 text-slate-700 dark:text-gray-100 font-semibold transition-all text-sm md:text-base text-left
+                          ${isPaused ? 'opacity-50 cursor-not-allowed' : 'hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-600'}
+                        `}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                  {isChildPlayer && (
                     <button
-                      key={idx}
-                      onClick={() => handleAnswer(option)}
-                      disabled={isPaused} // Disable when paused
-                      className={`
-                        p-4 rounded-xl border-2 border-slate-100 dark:border-gray-700 bg-slate-50 dark:bg-gray-700 text-slate-700 dark:text-gray-100 font-semibold transition-all text-sm md:text-base text-left
-                        ${isPaused ? 'opacity-50 cursor-not-allowed' : 'hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-600'}
-                      `}
+                      onClick={() => {
+                        if (onSkip) onSkip();
+                        handleClose();
+                      }}
+                      disabled={isPaused}
+                      className="w-full p-3 rounded-xl border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-semibold transition-all flex items-center justify-center gap-2"
+                      title="Skip this question without penalty"
                     >
-                      {option}
+                      <SkipForward className="w-5 h-5" />
+                      Skip Question (No Penalty)
                     </button>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
