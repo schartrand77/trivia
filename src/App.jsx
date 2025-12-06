@@ -11,10 +11,14 @@ import CategoriesModal from './components/CategoriesModal';
 import HowToPlayModal from './components/HowToPlayModal';
 import AboutModal from './components/AboutModal';
 import { initDB, getPlayers, addPlayer, saveGame, getGameHistory, updatePlayer as updatePlayerDB, deletePlayer as deletePlayerDB } from './db';
+import { Lock, LogIn } from 'lucide-react';
 
 // --- CONSTANTS ---
 import { CATEGORY_IDS } from './utils/categories';
 import { getDifficultyForAge, getAgeGroupLabel, filterCategoriesForAge, isFamilyModePlayer } from './utils/familyMode';
+
+const ADMIN_USERNAME = (import.meta.env.VITE_ADMIN_USERNAME || 'admin').trim();
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'trivia';
 
 // --- HELPER: HTML DECODER ---
 const decodeHTML = (html) => {
@@ -198,6 +202,31 @@ function gameReducer(state, action) {
 
 export default function App() {
   const [gameState, dispatch] = useReducer(gameReducer, initialState);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [credentials, setCredentials] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+
+  const handleLogin = () => {
+    setLoginError('');
+
+    const username = credentials.username.trim();
+    const password = credentials.password;
+
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      setIsAuthenticated(true);
+      setCredentials({ username: '', password: '' });
+      return;
+    }
+
+    setLoginError('Invalid username or password');
+  };
+
+  const handleCredentialsKeyDown = (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleLogin();
+    }
+  };
 
   // User & Records State (not part of the reducer)
   const [playerName, setPlayerName] = useState(() => {
@@ -232,6 +261,26 @@ export default function App() {
     const savedDifficulty = localStorage.getItem('trivia_difficulty');
     return savedDifficulty ? savedDifficulty : "any";
   });
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    dispatch({ type: 'START_NEW_GAME' });
+    setPlayerName("Player 1");
+    setPlayerAge(null);
+    setShowRecords(false);
+    setShowPlayers(false);
+    setShowPlayerSelector(false);
+    setShowGroupPlay(false);
+    setShowCategoriesModal(false);
+    setShowHowToPlayModal(false);
+    setShowAboutModal(false);
+    setRecords([]);
+    setPlayers([]);
+    setPlayQueue([]);
+    setCurrentQueueIndex(0);
+    setCredentials({ username: '', password: '' });
+    setLoginError('');
+  };
 
   // Dark Mode State
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -429,6 +478,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const initialize = async () => {
       await initDB();
       const players = getPlayers();
@@ -443,7 +494,7 @@ export default function App() {
       }
     };
     initialize();
-  }, [loadGameHistory, selectedCategoryIds]);
+  }, [isAuthenticated, loadGameHistory, selectedCategoryIds, startNewGame]);
 
   const saveRecord = useCallback(() => {
     if (gameState.correctAnswers === 0 && gameState.wrongAnswers === 0) return;
@@ -680,6 +731,80 @@ export default function App() {
     }
   }, [gameState.correctAnswers, gameState.wrongAnswers, categoryCount, playerName, saveRecord, startNewGame, playQueue, handleNextPlayerInQueue]);
 
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-slate-900/80 border border-white/10 rounded-2xl p-8 shadow-2xl text-white space-y-6 backdrop-blur">
+          <div className="flex items-center space-x-3">
+            <div className="p-3 bg-indigo-600/40 rounded-2xl">
+              <Lock className="w-6 h-6 text-yellow-300" />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-indigo-200">Stores Huddle Trivia</p>
+              <h1 className="text-2xl font-bold tracking-tight">Admin Access Required</h1>
+            </div>
+          </div>
+
+          <p className="text-slate-300 text-sm leading-relaxed">
+            Configure credentials via <code className="font-mono text-indigo-200">VITE_ADMIN_USERNAME</code> and <code className="font-mono text-indigo-200">VITE_ADMIN_PASSWORD</code> before building. Authentication is required before any gameplay or data loads.
+          </p>
+
+          <form 
+            onSubmit={(event) => event.preventDefault()}
+            autoComplete="off"
+            className="space-y-4"
+          >
+            <div>
+              <label htmlFor="admin-username" className="text-xs uppercase text-slate-400">Username</label>
+              <input
+                id="admin-username"
+                type="text"
+                value={credentials.username}
+                onChange={(e) => setCredentials((prev) => ({ ...prev, username: e.target.value }))}
+                onKeyDown={handleCredentialsKeyDown}
+                className="mt-1 w-full rounded-xl bg-slate-800 text-white border border-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="admin"
+                autoComplete="off"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="admin-password" className="text-xs uppercase text-slate-400">Password</label>
+              <input
+                id="admin-password"
+                type="password"
+                value={credentials.password}
+                onChange={(e) => setCredentials((prev) => ({ ...prev, password: e.target.value }))}
+                onKeyDown={handleCredentialsKeyDown}
+                className="mt-1 w-full rounded-xl bg-slate-800 text-white border border-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="••••••••"
+                autoComplete="off"
+                required
+              />
+            </div>
+
+            {loginError && (
+              <p className="text-sm text-red-400 text-center">{loginError}</p>
+            )}
+
+            <button
+              type="button"
+              onClick={handleLogin}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center space-x-2 transition-colors"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Unlock Trivia</span>
+            </button>
+          </form>
+
+          <p className="text-xs text-slate-500 text-center">
+            Defaults to <span className="font-mono text-slate-200">admin / trivia</span> when no env vars are provided. Reload or use the lock button in the header (once logged in) to return here.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 text-slate-800 font-sans flex flex-col">
@@ -719,6 +844,7 @@ export default function App() {
           isPaused={gameState.isPaused}
           onPauseGame={handlePauseGame}
           onResumeGame={handleResumeGame}
+          onLockApp={handleLogout}
         />
 
         <main className="flex-grow p-4 md:p-8 overflow-auto flex justify-center items-start">

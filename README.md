@@ -10,6 +10,19 @@ This repository contains a Vite + React SPA for a Trivia game.
 *   Animations and transitions for a more engaging user experience.
 *   Users can select the number of categories to play with.
 *   State management using `useReducer`.
+*   Admin login wall protects the SPA (credentials pulled from `VITE_ADMIN_USERNAME`/`VITE_ADMIN_PASSWORD`).
+
+## Admin login
+
+The entire application is behind a lightweight admin gate. Configure credentials before building by setting the Vite environment variables:
+
+```bash
+# .env /.env.local /.env.production
+VITE_ADMIN_USERNAME=youradmin
+VITE_ADMIN_PASSWORD=super-secret
+```
+
+Defaults are `admin / trivia` if nothing is provided. The login screen appears on every fresh load; use the lock icon in the header to sign out manually at any time.
 
 ## Local development
 
@@ -38,6 +51,8 @@ The project includes a `Dockerfile` to build a production image using nginx.
 -   Build locally: `docker build -t yourname/trivia:latest .`
 -   Run locally: `docker run -p 8080:80 yourname/trivia:latest`
 -   Or use `docker-compose up --build` to run with `docker-compose.yml` (binds to host port `8080`).
+
+> **Note:** Set `VITE_ADMIN_USERNAME`/`VITE_ADMIN_PASSWORD` in your `.env` before building so the compiled assets bake in your credentials.
 
 ## CI / Automatic builds (GitHub Actions)
 

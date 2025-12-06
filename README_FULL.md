@@ -7,6 +7,7 @@ Quick summary
 - Build locally: `docker build -t yourname/trivia:latest .`
 - Run locally: `docker run -p 8080:80 yourname/trivia:latest`
 - Or use `docker-compose up --build` to run with `docker-compose.yml` (binds to host port `8080`).
+- Admin gate baked in via `VITE_ADMIN_USERNAME` / `VITE_ADMIN_PASSWORD`.
 
 Tailwind integration
 
@@ -32,6 +33,18 @@ npm run dev
 npm run build
 ```
 
+Admin login
+-----------
+
+The SPA is now protected by an admin login screen. Credentials are injected at build time via the Vite env vars (defaults to `admin / trivia`):
+
+```bash
+VITE_ADMIN_USERNAME=myadmin
+VITE_ADMIN_PASSWORD=supersecret
+```
+
+Update your `.env` / `.env.production` before running `npm run build`, `docker build`, or CI so the compiled bundle includes your custom credentials. Once logged in you can lock the app again with the header icon or by clearing browser storage.
+
 Docker / Unraid
 
 1) Build and push to a registry (recommended)
@@ -41,7 +54,7 @@ docker build -t yourdockerhubusername/trivia:latest .
 docker push yourdockerhubusername/trivia:latest
 ```
 
-Then add the image in Unraid (Community Applications) and map host port `8080` → container port `80` (or adjust as needed).
+Then add the image in Unraid (Community Applications) and map host port `8080` → container port `80` (or adjust as needed). Make sure `.env` defines `VITE_ADMIN_USERNAME`/`VITE_ADMIN_PASSWORD` before you build so the login matches the credentials you intend to use.
 
 2) Build on Unraid host
 

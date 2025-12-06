@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HelpCircle, Check, X, Trophy, RefreshCw, Database, User, Shuffle, Loader } from 'lucide-react';
+import { HelpCircle, Check, X, Trophy, RefreshCw, Database, User, Shuffle, Loader, Lock, LogOut } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_IDS = [
@@ -23,6 +23,8 @@ const RANDOM_NAMES = [
 ];
 
 const CATEGORY_COUNT = 5; // Updated from 4 to 5
+const ADMIN_USERNAME = (import.meta.env.VITE_ADMIN_USERNAME || 'admin').trim();
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'trivia';
 
 // --- HELPER: HTML DECODER ---
 const decodeHTML = (html) => {
@@ -35,6 +37,11 @@ const decodeHTML = (html) => {
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default function App() {
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [credentials, setCredentials] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+
   // Game State
   const [gameData, setGameData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,9 +59,45 @@ export default function App() {
   // --- INITIALIZATION ---
   
   useEffect(() => {
+    if (!isAuthenticated) return;
     startNewGame();
     loadRecords();
-  }, []);
+  }, [isAuthenticated]);
+
+  // --- AUTH LOGIC ---
+
+  const handleLogin = () => {
+    setLoginError('');
+
+    const username = credentials.username.trim();
+    const password = credentials.password;
+
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      setIsAuthenticated(true);
+      setCredentials({ username: '', password: '' });
+      return;
+    }
+
+    setLoginError('Invalid username or password');
+  };
+
+  const handleCredentialsKeyDown = (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleLogin();
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setGameData([]);
+    setScore(0);
+    setAnsweredIds(new Set());
+    setCurrentClue(null);
+    setFeedback(null);
+    setRecords([]);
+    setShowRecords(false);
+  };
 
   // --- API & DATA LOGIC ---
 
@@ -198,6 +241,82 @@ export default function App() {
 
   // --- RENDER ---
 
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-slate-900/80 border border-white/10 rounded-2xl p-8 shadow-2xl text-white space-y-6 backdrop-blur">
+          <div className="flex items-center space-x-3">
+            <div className="p-3 bg-indigo-600/40 rounded-2xl">
+              <Lock className="w-6 h-6 text-yellow-300" />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-indigo-200">Trivia Master</p>
+              <h1 className="text-2xl font-bold tracking-tight">Admin Access Required</h1>
+            </div>
+          </div>
+
+          <p className="text-slate-300 text-sm leading-relaxed">
+            This deployment is restricted to administrators. Enter the credentials configured with{' '}
+            <code className="font-mono text-indigo-200">VITE_ADMIN_USERNAME</code> and{' '}
+            <code className="font-mono text-indigo-200">VITE_ADMIN_PASSWORD</code>.
+          </p>
+
+          <form 
+            onSubmit={(event) => event.preventDefault()}
+            autoComplete="off"
+            className="space-y-4"
+          >
+            <div>
+              <label htmlFor="admin-username" className="text-xs uppercase text-slate-400">Username</label>
+              <input
+                id="admin-username"
+                type="text"
+                value={credentials.username}
+                onChange={(e) => setCredentials((prev) => ({ ...prev, username: e.target.value }))}
+                onKeyDown={handleCredentialsKeyDown}
+                className="mt-1 w-full rounded-xl bg-slate-800 text-white border border-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="admin"
+                autoComplete="off"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="admin-password" className="text-xs uppercase text-slate-400">Password</label>
+              <input
+                id="admin-password"
+                type="password"
+                value={credentials.password}
+                onChange={(e) => setCredentials((prev) => ({ ...prev, password: e.target.value }))}
+                onKeyDown={handleCredentialsKeyDown}
+                className="mt-1 w-full rounded-xl bg-slate-800 text-white border border-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="••••••••"
+                autoComplete="off"
+                required
+              />
+            </div>
+
+            {loginError && (
+              <p className="text-sm text-red-400 text-center">{loginError}</p>
+            )}
+
+            <button
+              type="button"
+              onClick={handleLogin}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center space-x-2 transition-colors"
+            >
+              <Lock className="w-4 h-4" />
+              <span>Unlock Dashboard</span>
+            </button>
+          </form>
+
+          <p className="text-xs text-slate-500 text-center">
+            Defaults to <span className="font-mono text-slate-200">admin / trivia</span> when no env vars are provided. Authentication resets each time the page reloads.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-800 flex flex-col">
       
@@ -235,6 +354,7 @@ export default function App() {
             {/* Controls */}
             <div className="flex space-x-1">
               <button 
+                type="button"
                 onClick={() => setShowRecords(true)}
                 className="p-2 hover:bg-indigo-600 rounded-full transition-colors"
                 title="History / Records"
@@ -242,11 +362,20 @@ export default function App() {
                 <Database className="w-5 h-5" />
               </button>
               <button 
+                type="button"
                 onClick={() => { saveRecord(); startNewGame(); }}
                 className="p-2 hover:bg-indigo-600 rounded-full transition-colors"
                 title="Restart Game"
               >
                 <RefreshCw className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="p-2 hover:bg-indigo-600 rounded-full transition-colors"
+                title="Lock App"
+              >
+                <LogOut className="w-5 h-5" />
               </button>
             </div>
           </div>
