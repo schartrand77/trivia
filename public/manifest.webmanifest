@@ -1,0 +1,18 @@
+{
+  "name": "Stores Huddle Trivia",
+  "short_name": "Trivia",
+  "description": "Fast-paced trivia for solo sessions or group play, backed by the Stores Huddle data set.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#4338ca",
+  "icons": [
+    {
+      "src": "/appicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

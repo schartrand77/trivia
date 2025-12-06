@@ -10,6 +10,7 @@ This repository contains a Vite + React SPA for a Trivia game.
 *   Animations and transitions for a more engaging user experience.
 *   Users can select the number of categories to play with.
 *   State management using `useReducer`.
+*   Installable PWA (add to home screen on iOS/Android via included manifest).
 *   Admin login wall protects the SPA (credentials pulled from `VITE_ADMIN_USERNAME`/`VITE_ADMIN_PASSWORD`).
 
 ## Admin login

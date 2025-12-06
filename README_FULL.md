@@ -9,6 +9,7 @@ Quick summary
 - Or use `docker-compose up --build` to run with `docker-compose.yml` (binds to host port `8080`).
 - Admin gate controlled via `VITE_ADMIN_USERNAME` / `VITE_ADMIN_PASSWORD`.
 - When using `docker-compose.yml`, credentials are pulled from your `.env`, so change `VITE_ADMIN_*` there before running Compose.
+- Installable PWA (a manifest + icons are included so you can add the app to mobile home screens).
 
 Tailwind integration
 
