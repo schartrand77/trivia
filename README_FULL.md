@@ -7,7 +7,8 @@ Quick summary
 - Build locally: `docker build -t yourname/trivia:latest .`
 - Run locally: `docker run -p 8080:80 yourname/trivia:latest`
 - Or use `docker-compose up --build` to run with `docker-compose.yml` (binds to host port `8080`).
-- Admin gate baked in via `VITE_ADMIN_USERNAME` / `VITE_ADMIN_PASSWORD`.
+- Admin gate controlled via `VITE_ADMIN_USERNAME` / `VITE_ADMIN_PASSWORD`.
+- When using `docker-compose.yml`, credentials are pulled from your `.env`, so change `VITE_ADMIN_*` there before running Compose.
 
 Tailwind integration
 
@@ -36,14 +37,23 @@ npm run build
 Admin login
 -----------
 
-The SPA is now protected by an admin login screen. Credentials are injected at build time via the Vite env vars (defaults to `admin / trivia`):
+The SPA is protected by an admin login screen. Credentials are resolved in this order:
+
+1. `VITE_ADMIN_USERNAME` / `VITE_ADMIN_PASSWORD` environment variables injected into `/env-config.js` when the container starts.
+2. Vite env vars from `.env` (for the dev server).
+3. Built-in defaults of `admin / trivia`.
+
+For local dev, add the variables to `.env`. For Docker/Unraid deployments, set the environment variables when you run the container (no rebuild required because the entrypoint rewrites `/usr/share/nginx/html/env-config.js` on boot).
 
 ```bash
-VITE_ADMIN_USERNAME=myadmin
-VITE_ADMIN_PASSWORD=supersecret
+# docker run example
+docker run -d \
+  -e VITE_ADMIN_USERNAME=myadmin \
+  -e VITE_ADMIN_PASSWORD=supersecret \
+  -p 8080:80 yourname/trivia:latest
 ```
 
-Update your `.env` / `.env.production` before running `npm run build`, `docker build`, or CI so the compiled bundle includes your custom credentials. Once logged in you can lock the app again with the header icon or by clearing browser storage.
+Once logged in you can lock the app again with the header icon or by clearing browser storage.
 
 Docker / Unraid
 
@@ -54,7 +64,7 @@ docker build -t yourdockerhubusername/trivia:latest .
 docker push yourdockerhubusername/trivia:latest
 ```
 
-Then add the image in Unraid (Community Applications) and map host port `8080` → container port `80` (or adjust as needed). Make sure `.env` defines `VITE_ADMIN_USERNAME`/`VITE_ADMIN_PASSWORD` before you build so the login matches the credentials you intend to use.
+Then add the image in Unraid (Community Applications) and map host port `8080` → container port `80` (or adjust as needed). Set `VITE_ADMIN_USERNAME`/`VITE_ADMIN_PASSWORD` as container environment variables in the template so the login matches the credentials you intend to use (no image rebuild necessary).
 
 2) Build on Unraid host
 

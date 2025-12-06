@@ -23,8 +23,17 @@ const RANDOM_NAMES = [
 ];
 
 const CATEGORY_COUNT = 5; // Updated from 4 to 5
-const ADMIN_USERNAME = (import.meta.env.VITE_ADMIN_USERNAME || 'admin').trim();
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'trivia';
+
+const getRuntimeConfig = () => {
+  if (typeof window !== 'undefined' && window.__TRIVIA_CONFIG__) {
+    return window.__TRIVIA_CONFIG__;
+  }
+  return {};
+};
+
+const runtimeConfig = getRuntimeConfig();
+const ADMIN_USERNAME = (runtimeConfig.VITE_ADMIN_USERNAME ?? import.meta.env.VITE_ADMIN_USERNAME ?? 'admin').trim();
+const ADMIN_PASSWORD = runtimeConfig.VITE_ADMIN_PASSWORD ?? import.meta.env.VITE_ADMIN_PASSWORD ?? 'trivia';
 
 // --- HELPER: HTML DECODER ---
 const decodeHTML = (html) => {

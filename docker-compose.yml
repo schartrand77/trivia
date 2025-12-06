@@ -10,6 +10,8 @@ services:
       - "${PORT_HOST}:${PORT_CONTAINER}"
     environment:
       TZ: ${TZ}
+      VITE_ADMIN_USERNAME: ${VITE_ADMIN_USERNAME}
+      VITE_ADMIN_PASSWORD: ${VITE_ADMIN_PASSWORD}
     volumes:
       - ${DATA_VOLUME}:/data  # Mount local data directory for persistent player records
     restart: ${RESTART_POLICY}
