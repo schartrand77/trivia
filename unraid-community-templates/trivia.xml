@@ -25,6 +25,8 @@ Trivia is a Vite + React single-page application served through nginx. The image
   <Requires></Requires>
   <Config Name="HTTP Port" Target="80" Default="8080" Mode="tcp" Description="Port for the Trivia web UI" Type="Port" Display="always" Required="true" Mask="false"></Config>
   <Config Name="Timezone" Target="TZ" Default="Etc/UTC" Mode="" Description="Container timezone (optional)" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="Admin Username" Target="VITE_ADMIN_USERNAME" Default="admin" Mode="" Description="Login username required by the SPA" Type="Variable" Display="always" Required="true" Mask="false"></Config>
+  <Config Name="Admin Password" Target="VITE_ADMIN_PASSWORD" Default="trivia" Mode="" Description="Login password required by the SPA" Type="Variable" Display="always" Required="true" Mask="true"></Config>
 =======
   <Name>trivia</Name>
   <Repository>ghcr.io/schartrand77/trivia:latest</Repository>
@@ -53,6 +55,8 @@ Deploy this container and bind an `appdata` folder to `/data` so player records 
   <Config Name="Timezone" Target="TZ" Default="Etc/UTC" Description="Timezone" Type="Variable" Display="always" Required="false" Mask="false"/>
   <Config Name="PUID" Target="PUID" Default="99" Description="User id for file permissions" Type="Variable" Display="always" Required="false" Mask="false"/>
   <Config Name="PGID" Target="PGID" Default="100" Description="Group id for file permissions" Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Admin Username" Target="VITE_ADMIN_USERNAME" Default="admin" Description="Login username required by the SPA" Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Admin Password" Target="VITE_ADMIN_PASSWORD" Default="trivia" Description="Login password required by the SPA" Type="Variable" Display="always" Required="true" Mask="true"/>
 
 </Container>
 <?xml version="1.0"?>
@@ -95,6 +99,16 @@ Deploy this container and bind an `appdata` folder to `/data` so player records 
         <Name>PGID</Name>
         <Default>100</Default>
         <Description>GID for file permissions (optional)</Description>
+      </Variable>
+      <Variable>
+        <Name>VITE_ADMIN_USERNAME</Name>
+        <Default>admin</Default>
+        <Description>Login username required by the SPA</Description>
+      </Variable>
+      <Variable>
+        <Name>VITE_ADMIN_PASSWORD</Name>
+        <Default>trivia</Default>
+        <Description>Login password required by the SPA</Description>
       </Variable>
     </Environment>
   </Config>
